@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+
+/* Tokens del sistema — rojo del tulipán del logo, negro del trazo, verde de la hoja */
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-jb), ui-monospace, monospace;
+
+  --color-brand-50: #fdf2f3;
+  --color-brand-100: #fbe3e5;
+  --color-brand-200: #f6c4c9;
+  --color-brand-500: #d42a37;
+  --color-brand-600: #c8102e;
+  --color-brand-700: #a50d26;
+  --color-brand-800: #7e0a1d;
+
+  --color-ink-950: #0f1013;
+  --color-ink-900: #16181c;
+  --color-ink-800: #1f2228;
+  --color-ink-700: #2b2f36;
+  --color-ink-600: #3d424b;
+
+  --color-umaru-500: #3a6ea5;
+  --color-umaru-50: #eef3f9;
+
+  --color-leaf-500: #5ea71b;
+  --color-leaf-600: #4c8c12;
+  --color-leaf-50: #f1f8e8;
+
+  --color-canvas: #f2f3f5;
+  --color-line: #e6e7ea;
+  --color-muted: #6b7280;
+  --color-subtle: #9aa0a8;
+
+  --radius-card: 14px;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+}
+
+@layer base {
+  html { color-scheme: light; }
+  body {
+    @apply bg-canvas text-ink-900 antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  ::selection { background: var(--color-brand-200); }
+  :focus-visible { outline: 2px solid var(--color-brand-600); outline-offset: 2px; }
+  input[type='number']::-webkit-inner-spin-button { opacity: 0.4; }
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
+
+@layer components {
+  .card { @apply rounded-[var(--radius-card)] border border-line bg-white shadow-[var(--shadow-card)]; }
+  .field {
+    @apply h-9 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink-900 placeholder:text-subtle
+           transition-colors focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100
+           disabled:bg-canvas disabled:text-muted;
+  }
+  .label { @apply mb-1 block text-xs font-semibold tracking-wide text-muted uppercase; }
+  .th { @apply whitespace-nowrap border-b border-line bg-[#fafafb] px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-muted uppercase; }
+  .td { @apply border-b border-line/70 px-3 py-2.5 align-middle text-sm; }
+}
+
+/* Impresión de actas, informes y reportes */
+/* Ticket de la tiquetera térmica (80 mm; 64 mm de contenido seguro): solo se ve al imprimirlo */
+.ticket-portal { display: none; }
+@page ticket { size: 80mm auto; margin: 0; }
+@media print {
+  html.imprimiendo-ticket body > *:not(.ticket-portal) { display: none !important; }
+  html.imprimiendo-ticket body { page: ticket; }
+  html.imprimiendo-ticket, html.imprimiendo-ticket body { height: auto !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  html.imprimiendo-ticket body > .ticket-portal {
+    display: block !important; page: ticket;
+    width: 64mm !important; margin: 0 !important; padding: 0 0 0 6mm !important;
+    font-family: system-ui, Arial, sans-serif !important; font-size: 11px !important; background: #fff !important;
+  }
+  html.imprimiendo-ticket body > .ticket-portal, html.imprimiendo-ticket body > .ticket-portal * { color: #000 !important; font-weight: 700 !important; }
+}
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: white !important; }
+  .no-print { display: none !important; }
+  .print-area { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; }
+  main { padding: 0 !important; }
+  /* documento a imprimir (requerimiento…): solo la hoja, sin el título de la pantalla ni avisos */
+  main:has(.documento) :not(.documento, .documento *, :has(.documento)) { display: none !important; }
+  /* las tablas del documento entran completas en la hoja (sin barra de desplazamiento) */
+  .print-area .overflow-x-auto { overflow: visible !important; }
+  .print-area table { width: 100% !important; font-size: 9.5px !important; }
+  .print-area th, .print-area td { padding: 4px 5px !important; }
+  .print-area img.object-contain { max-height: 48px !important; }
+  .print-area tr, .print-area .firmas > div { break-inside: avoid; }
+  .print-area .firmas { break-inside: avoid; }
+}

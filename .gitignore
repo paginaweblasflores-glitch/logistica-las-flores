@@ -1,0 +1,45 @@
+# --- Dependencias y compilación ---
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+
+# --- Variables de entorno (claves de Supabase) ---
+.env
+.env.local
+.env*.local
+# la plantilla sí se sube
+!.env.example
+
+# --- Carpetas de trabajo (datos reales del negocio, no van al repositorio) ---
+# Excel de LOGISTICA 2026, catálogos, cargas reales, solicitudes, notas de reuniones…
+/doc/
+# análisis de los Excel reales
+/docs/
+# configuración local del asistente / editor
+/.claude/
+.vscode/
+.idea/
+
+# --- Scripts de una sola vez sobre la base de pruebas ---
+database/revertir_pruebas_*.sql
+
+# --- Archivos sueltos con datos (por si alguno queda fuera de /doc) ---
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.docx
+*.doc
+*.pdf
+*CONTRACE*A*
+
+# --- Sistema y registros ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+npm-debug.log*
