@@ -16,7 +16,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   const params = await searchParams
   const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
   const { page, size, from, to } = paginar(params)
-  const estado = sp(params, 'estado'), vista = sp(params, 'vista', 'pendientes')
+  const estado = sp(params, 'estado'), vista = sp(params, 'vista', 'todos')
   // Dos requerimientos que no se mezclan: el de los jefes de área y el del almacén (su lista para reponer stock).
   // El almacén ve solo los suyos; el jefe de área, los de áreas; Logística, cada uno en su pestaña.
   const origen = panel === 'almacen' ? 'almacen' : panel === 'area' ? 'area' : sp(params, 'origen', 'area') === 'almacen' ? 'almacen' : 'area'
@@ -55,9 +55,6 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   return (
     <>
       <PageHeader title="Requerimientos"
-        description={delAlmacen
-          ? (panel === 'almacen' ? 'Su lista de productos para reponer stock. Logística la aprueba y compra; cuando llega, usted la registra en Entradas con la boleta.' : 'Listas del almacén para reponer stock. Usted aprueba y marca «Comprado» (sin precios): la llegada y la boleta las registra el almacén.')
-          : 'Solicitudes de bienes y materiales de las áreas. El tiempo entre la solicitud y la aprobación alimenta el indicador “requisiciones < 24 h” del MOF.'}
         actions={puedeCrear ? <LinkButton href="/requerimientos/nuevo"><Plus className="size-4" /> Nuevo requerimiento</LinkButton> : undefined} />
       {esLogistica && (
         <nav className="mb-5 flex flex-wrap gap-1 rounded-xl border border-line bg-white p-1">
@@ -71,7 +68,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
       )}
       <FilterBar>
         {esLogistica && <input type="hidden" name="origen" value={origen} />}
-        <FilterField label="Vista"><Select name="vista" defaultValue={vista} options={[{ id: 'pendientes', nombre: 'Pendientes' }, { id: 'todos', nombre: 'Todos' }]} /></FilterField>
+        <FilterField label="Vista"><Select name="vista" defaultValue={vista} options={[{ id: 'todos', nombre: 'Todos' }, { id: 'pendientes', nombre: 'Pendientes' }]} /></FilterField>
         <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="—" /></FilterField>
       </FilterBar>
       <Section icon={ClipboardList} title="Solicitudes" bodyClassName="p-0"

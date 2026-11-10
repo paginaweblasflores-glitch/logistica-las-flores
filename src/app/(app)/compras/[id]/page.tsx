@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { ComboInput } from '@/components/combo-input'
 import { notFound } from 'next/navigation'
 import { ShoppingCart, Truck, PackageCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -9,13 +8,12 @@ import { etiquetaNegocio } from '@/lib/empresa'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, Stat, Note } from '@/components/ui'
-import { Select } from '@/components/select'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { Recepcion } from './recepcion'
+import { AgregarTramo } from './agregar-tramo'
 import { ResumenCompra, type FleteResumen } from './resumen'
-import { anularCompra, aprobarCompra, agregarTransporte } from '../actions'
-import { PagedTable } from '@/components/pager'
+import { anularCompra, aprobarCompra } from '../actions'
 
 export const metadata = { title: 'Compra' }
 
@@ -56,6 +54,9 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
       fechaCompromiso={extra?.fecha_compromiso ?? null} observacion={extra?.observacion ?? null} />
   }
   const umbral = 0.1
+  // compra marcada «Comprado» sin precios: el almacén los pone con la boleta al llegar
+  const sinPrecio = (l: { precio_unitario: number }) => c.estado === 'aprobada' && !(Number(l.precio_unitario) > 0)
+  const todoSinPrecio = lineas.length > 0 && lineas.every(sinPrecio)
   const esMiAlmacen = almacenSel.lista.length <= 1 || almacenSel.id === c.almacen_id
   const recibida = c.estado === 'recibida'
   const hayCatalogo = lineas.some((l) => l.producto_id)
@@ -64,17 +65,21 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
   const conLote = new Set(lineasExtra.filter((x) => x.producto?.controla_lote).map((x) => x.producto!.id))
 
   // Indicadores según el paso: cada uno aparece cuando ya tiene sentido
-  const indicadores: React.ReactNode[] = [
-    <Stat key="total" label="Total" value={fmtSoles(c.total)} hint={`${c.items} ${Number(c.items) === 1 ? 'producto' : 'productos'}`} />,
-  ]
+  const indicadores: React.ReactNode[] = []
   if (c.estado === 'borrador') {
     indicadores.push(<Stat key="sig" label="Siguiente paso" value="Aprobar" hint={extra?.fecha_compromiso ? `Entrega comprometida ${fmtDate(extra.fecha_compromiso, true)}` : 'El plazo de entrega empieza al aprobar'} />)
   }
   if (c.estado === 'aprobada') {
-    indicadores.push(<Stat key="plazo" label="Debe llegar" value={fmtDate(c.fecha_objetivo, true)} hint={c.solo_fuera_catalogo ? 'Registre la llegada cuando llegue' : 'Lo confirma el almacén al llegar'} />)
+    indicadores.push(<Stat key="plazo" label="Debe llegar" value={fmtDate(c.fecha_objetivo, true)} />)
   }
+  // con flete: compra + flete y el costo total; sin flete, solo el total de la compra
   if (Number(c.costo_transporte) > 0) {
-    indicadores.push(<Stat key="flete" label="Flete" value={fmtSoles(c.costo_transporte)} hint={`Costo total ${fmtSoles(c.costo_total)}`} />)
+    indicadores.push(
+      <Stat key="partes" label="Compra + flete" value={`${fmtSoles(c.total)} + ${fmtSoles(c.costo_transporte)}`} hint={`${c.items} ${Number(c.items) === 1 ? 'producto' : 'productos'}`} />,
+      <Stat key="costo" label="Costo total" value={fmtSoles(c.costo_total)} />,
+    )
+  } else {
+    indicadores.push(<Stat key="total" label="Total" value={todoSinPrecio ? '—' : fmtSoles(c.total)} hint={todoSinPrecio ? 'El precio llega con la boleta' : `${c.items} ${Number(c.items) === 1 ? 'producto' : 'productos'}`} />)
   }
   if (Number(c.base_comparable) > 0) {
     indicadores.push(<Stat key="ahorro" label="Ahorro vs. compra anterior" value={fmtSoles(c.ahorro)} tone={Number(c.ahorro) > 0 ? 'good' : Number(c.ahorro) < 0 ? 'bad' : 'default'}
@@ -112,7 +117,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
       <div className={cn('mb-5 grid grid-cols-2 gap-4', indicadores.length >= 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>{indicadores}</div>
 
       <Section icon={ShoppingCart} title="Detalle" className="mb-5" bodyClassName="p-0"
-               stats={[{ label: 'Documento', value: `${c.tipo_documento ?? ''} ${c.numero_documento ?? ''}`.trim() || '—' }, { label: 'Pago', value: c.forma_pago ?? '—' }]}>
+               stats={[{ label: 'Documento', value: `${c.tipo_documento ?? ''} ${c.numero_documento ?? ''}`.trim().toUpperCase() || '—' }, { label: 'Pago', value: c.forma_pago ?? '—' }]}>
         <Table>
           <thead><tr><Th>Producto</Th><Th right>Pedido</Th>{recibida && <Th right>Recibido</Th>}<Th right>Precio</Th>
             {hayCatalogo && <><Th right>Precio anterior</Th><Th right>Variación</Th></>}<Th right>Importe</Th>{hayVence && <Th>Vence</Th>}</tr></thead>
@@ -126,20 +131,42 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
                   ? <>{fmtQty(pd.cantidad_pedida)} {pd.pedida!.nombre}<span className="block text-[11px] text-muted">= {fmtQty(l.cantidad_solicitada)} {l.unidad}</span></>
                   : <>{fmtQty(l.cantidad_solicitada)} {l.unidad}</> })()}</Td>
                 {recibida && <Td right className={l.cantidad_recibida !== null && Number(l.cantidad_recibida) < Number(l.cantidad_solicitada) ? 'text-amber-600' : ''}>{fmtQty(l.cantidad_recibida)}</Td>}
-                <Td right className="font-semibold">{fmtSoles(l.precio_unitario)}</Td>
+                {/* sin precio todavía (marcada «Comprado»): el precio llega con la boleta */}
+                <Td right className="font-semibold">{sinPrecio(l) ? <span className="text-xs font-normal text-muted">Con la boleta</span> : fmtSoles(l.precio_unitario)}</Td>
                 {hayCatalogo && <>
                   <Td right className="text-muted">{l.producto_id ? fmtSoles(l.precio_anterior) : ''}</Td>
                   <Td right>{l.variacion_pct === null ? (l.producto_id ? '—' : '') : <Badge tone={l.variacion_pct > umbral ? 'red' : l.variacion_pct > 0 ? 'amber' : 'green'}>{l.variacion_pct > 0 ? '▲' : '▼'} {fmtPct(Math.abs(l.variacion_pct))}</Badge>}</Td>
                 </>}
-                <Td right className="font-semibold">{fmtSoles(l.importe)}</Td>
+                <Td right className="font-semibold">{sinPrecio(l) ? '—' : fmtSoles(l.importe)}</Td>
                 {hayVence && <Td className="text-xs">{fmtDate(l.fecha_vencimiento)}</Td>}
               </tr>
             ))}
-            <tr><Td colSpan={3 + (recibida ? 1 : 0) + (hayCatalogo ? 2 : 0)} className="text-right font-semibold">Total</Td><Td right className="text-base font-bold">{fmtSoles(c.total)}</Td>{hayVence && <Td />}</tr>
+            <tr><Td colSpan={3 + (recibida ? 1 : 0) + (hayCatalogo ? 2 : 0)} className="text-right font-semibold">Total</Td><Td right className="text-base font-bold">{todoSinPrecio ? '—' : fmtSoles(c.total)}</Td>{hayVence && <Td />}</tr>
           </tbody>
         </Table>
         {extra?.observacion && <p className="border-t border-line px-5 py-3 text-sm"><span className="text-muted">Observación:</span> {extra.observacion}</p>}
       </Section>
+
+      {/* Flete opcional y por tramos: se registra después de aprobar, cuando ocurre
+          (p. ej. Shalom Lima → agencia Huamanga y luego taxi agencia → local). Si el proveedor entrega en el local, no va nada. */}
+      {c.estado !== 'borrador' && (c.estado !== 'anulada' || !!fletes?.length) && (
+      <Section icon={Truck} title="Flete de esta compra (opcional)" className="mb-5" bodyClassName="p-0" stats={[{ label: 'Total flete', value: fmtSoles(c.costo_transporte) }]}>
+        {fletes?.length ? (
+          <Table><thead><tr><Th>Tramo</Th><Th>Fecha</Th><Th>Transportista</Th><Th>Origen → destino</Th><Th>Guía</Th><Th right>Costo</Th></tr></thead><tbody>
+              {(fletes as unknown as { id: string; fecha: string; costo: number; documento: string | null; destino: string | null; transportista: string | null; proveedor: { razon_social: string } | null; ciudad: { nombre: string } | null }[]).map((t, i) => (
+                <tr key={t.id}><Td className="tabular">{i + 1}</Td><Td>{fmtDate(t.fecha)}</Td><Td>{t.proveedor?.razon_social ?? t.transportista ?? '—'}</Td>
+                  <Td className="text-xs">{t.ciudad?.nombre ?? '—'} → {t.destino ?? '—'}</Td><Td>{t.documento ?? '—'}</Td><Td right className="font-semibold">{fmtSoles(t.costo)}</Td></tr>
+              ))}
+            </tbody></Table>
+        ) : (
+          <p className="px-5 py-4 text-sm text-muted">Sin flete.</p>
+        )}
+        {!almacen && c.estado !== 'anulada' && (
+          <AgregarTramo compraId={id} localId={c.local_id} transportistas={transportistas} ciudades={ciudades} hoy={hoyLima()} hayTramos={!!fletes?.length}
+            ciudadInicial={ciudades.find((x) => x.id === c.ciudad_id)?.nombre} />
+        )}
+      </Section>
+      )}
 
       {/* Llegada: los productos del almacén los recibe el almacén (el elegido arriba); si todo es fuera de catálogo, Logística */}
       {almacen && c.estado === 'aprobada' && !c.solo_fuera_catalogo && !esMiAlmacen && (
@@ -156,36 +183,6 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
       )}
       {!almacen && c.estado === 'aprobada' && !c.solo_fuera_catalogo && (
         <p className="mb-5 rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">Pendiente de llegada: la confirma el almacén (fecha, hora y cantidades) cuando llegue la mercadería.</p>
-      )}
-
-      {/* Flete opcional y por tramos: se registra después de aprobar, cuando ocurre
-          (p. ej. Shalom Lima → agencia Huamanga y luego taxi agencia → local). Si el proveedor entrega en el local, no va nada. */}
-      {c.estado !== 'borrador' && (c.estado !== 'anulada' || !!fletes?.length) && (
-      <Section icon={Truck} title="Transporte (opcional)" bodyClassName="p-0" stats={[{ label: 'Total flete', value: fmtSoles(c.costo_transporte) }]}>
-        {fletes?.length ? (
-          <PagedTable head={<tr><Th>Tramo</Th><Th>Fecha</Th><Th>Transportista</Th><Th>Origen → destino</Th><Th>Guía</Th><Th right>Costo</Th></tr>}>
-              {(fletes as unknown as { id: string; fecha: string; costo: number; documento: string | null; destino: string | null; transportista: string | null; proveedor: { razon_social: string } | null; ciudad: { nombre: string } | null }[]).map((t, i) => (
-                <tr key={t.id}><Td className="tabular">{i + 1}</Td><Td>{fmtDate(t.fecha)}</Td><Td>{t.proveedor?.razon_social ?? t.transportista ?? '—'}</Td>
-                  <Td className="text-xs">{t.ciudad?.nombre ?? '—'} → {t.destino ?? '—'}</Td><Td>{t.documento ?? '—'}</Td><Td right className="font-semibold">{fmtSoles(t.costo)}</Td></tr>
-              ))}
-            </PagedTable>
-        ) : (
-          <p className="px-5 py-4 text-sm text-muted">Sin flete. Si el proveedor la entrega en el local, no registre nada. Si llega por agencia, registre cada tramo cuando ocurra
-            (por ejemplo: Shalom de Lima a la agencia en Huamanga, y luego el taxi de la agencia al local).</p>
-        )}
-        {!almacen && c.estado !== 'anulada' && (
-          <ActionForm action={agregarTransporte} resetOnSuccess className="grid gap-3 border-t border-line p-5 md:grid-cols-6">
-            <input type="hidden" name="compra_id" value={id} /><input type="hidden" name="local_id" value={c.local_id} />
-            <label className="md:col-span-2"><span className="label">Transportista *</span><ComboInput name="transportista" opciones={transportistas} placeholder="Elija o escriba: Shalom, taxi particular…" /></label>
-            <label><span className="label">Fecha</span><input type="date" name="fecha" defaultValue={hoyLima()} className="field" /></label>
-            <label><span className="label">Desde (ciudad)</span><ComboInput name="ciudad" opciones={ciudades} placeholder="Lima, Ayacucho…" defaultValue={fletes?.length ? '' : ciudades.find((x) => x.id === c.ciudad_id)?.nombre} /></label>
-            <label><span className="label">Hasta</span><input name="destino" className="field" placeholder="Agencia Shalom Huamanga, el local…" /></label>
-            <label><span className="label">Costo S/ *</span><input type="number" step="0.01" min="0" name="costo" required className="field" /></label>
-            <label className="md:col-span-2"><span className="label">Guía / boleta</span><input name="documento" className="field" /></label>
-            <div className="flex items-end justify-end md:col-span-4"><SubmitButton variant="outline" size="sm">{fletes?.length ? 'Agregar otro tramo' : 'Agregar flete'}</SubmitButton></div>
-          </ActionForm>
-        )}
-      </Section>
       )}
     </>
   )

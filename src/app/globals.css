@@ -30,6 +30,9 @@
   --color-line: #e6e7ea;
   --color-muted: #6b7280;
   --color-subtle: #9aa0a8;
+  /* borde de los campos: 3:1 sobre blanco (WCAG 1.4.11), para que cada caja se vea aunque esté vacía */
+  --color-field: #8b929c;
+  --color-field-hover: #5f6670;
 
   --radius-card: 14px;
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
@@ -50,12 +53,18 @@
 
 @layer components {
   .card { @apply rounded-[var(--radius-card)] border border-line bg-white shadow-[var(--shadow-card)]; }
+  /* campo: borde visible, el activo en rojo con halo; el bloqueado en gris (se distingue de los editables) */
   .field {
-    @apply h-9 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink-900 placeholder:text-subtle
-           transition-colors focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100
-           disabled:bg-canvas disabled:text-muted;
+    @apply h-10 w-full rounded-lg border border-field bg-white px-3 text-sm text-ink-900 placeholder:text-muted
+           transition-colors hover:border-field-hover
+           focus:border-brand-600 focus:shadow-[inset_0_0_0_1px_var(--color-brand-600)] focus:outline-none focus:ring-[3px] focus:ring-brand-100
+           disabled:border-line disabled:bg-canvas disabled:text-muted;
   }
-  .label { @apply mb-1 block text-xs font-semibold tracking-wide text-muted uppercase; }
+  /* etiqueta: legible (no mayúsculas chicas en gris) */
+  .label { @apply mb-1.5 block text-[13px] font-semibold text-ink-700; }
+  .label .req { @apply text-brand-600; }
+  /* formularios en columnas: si una etiqueta ocupa dos líneas, los campos de la fila igual quedan al mismo nivel */
+  .grid > label:has(> .label:first-child), .grid > div:has(> .label:first-child) { @apply flex flex-col justify-end; }
   .th { @apply whitespace-nowrap border-b border-line bg-[#fafafb] px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-muted uppercase; }
   .td { @apply border-b border-line/70 px-3 py-2.5 align-middle text-sm; }
 }
@@ -76,7 +85,15 @@
   html.imprimiendo-ticket body > .ticket-portal, html.imprimiendo-ticket body > .ticket-portal * { color: #000 !important; font-weight: 700 !important; }
 }
 @media print {
-  @page { size: A4; margin: 12mm; }
+  /* pie propio en cada hoja; al definir los márgenes de página, el navegador ya no imprime la dirección (localhost…),
+     la fecha ni el título de la pestaña */
+  @page {
+    size: A4; margin: 12mm 12mm 14mm;
+    @top-left { content: ''; } @top-center { content: ''; } @top-right { content: ''; }
+    @bottom-left { content: ''; }
+    @bottom-center { content: 'Sistema de Logística · Corporación Las Flores'; font-family: system-ui, Arial, sans-serif; font-size: 8pt; color: #6b6b6b; }
+    @bottom-right { content: counter(page) ' / ' counter(pages); font-family: system-ui, Arial, sans-serif; font-size: 8pt; color: #6b6b6b; }
+  }
   body { background: white !important; }
   .no-print { display: none !important; }
   .print-area { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; padding: 0 !important; }

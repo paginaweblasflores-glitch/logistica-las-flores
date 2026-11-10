@@ -21,7 +21,7 @@ export default async function NuevaCotizacionPage() {
           {/* orden estándar: productos → datos → observación */}
           <div className="mb-6"><CotLineas /></div>
           <div className="grid gap-4 md:grid-cols-4">
-            <label className="md:col-span-2"><span className="label">Título *</span><input name="titulo" required className="field" placeholder="Ej. Uniformes para mozos" /></label>
+            <label className="md:col-span-2"><span className="label">Título <span className="req">*</span></span><input name="titulo" required className="field" placeholder="Ej. Uniformes para mozos" /></label>
             <label><span className="label">Negocio</span><Select name="local" options={locales} defaultValue={local?.id} placeholder="Ambos negocios" /></label>
             <label><span className="label">Fecha</span><input type="date" name="fecha" defaultValue={hoyLima()} className="field" /></label>
           </div>

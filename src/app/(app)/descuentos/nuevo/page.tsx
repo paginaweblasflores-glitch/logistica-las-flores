@@ -20,8 +20,8 @@ export default async function NuevoDescuentoPage() {
       <ActionForm action={crearDescuentoManual} className="space-y-5">
         <Section title="Datos y detalle del descuento">
           <div className="grid gap-4 md:grid-cols-4">
-            <label><span className="label">Negocio *</span><Select name="local" options={locales} defaultValue={local?.id} required placeholder="—" /></label>
-            <label><span className="label">Colaborador *</span><Select name="personal" options={personal} required placeholder="—" agregar="personal" /></label>
+            <label><span className="label">Negocio <span className="req">*</span></span><Select name="local" options={locales} defaultValue={local?.id} required placeholder="—" /></label>
+            <label><span className="label">Colaborador <span className="req">*</span></span><Select name="personal" options={personal} required placeholder="—" agregar="personal" /></label>
             <label><span className="label">Origen</span><Select name="origen" required defaultValue="caja" options={[{ id: 'caja', nombre: 'Caja' }, { id: 'bebidas', nombre: 'Bebidas' }, { id: 'manual', nombre: 'Otro' }]} /></label>
             <label><span className="label">Fecha</span><input type="date" name="fecha" defaultValue={hoyLima()} className="field" /></label>
             <label className="md:col-span-4"><span className="label">Motivo / observación</span><input name="observacion" className="field" /></label>

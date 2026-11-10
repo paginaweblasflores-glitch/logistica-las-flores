@@ -17,13 +17,14 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
   const { data } = await supabase.from('movimiento')
     .select(`id, nro, fecha, tipo, anulado, motivo_anulacion, anulado_at, documento, observacion, recibe, referencia_tipo, referencia_id, almacen_id,
              almacen:almacen_id(nombre), local:local_id(codigo, nombre), area:area_id(nombre),
-             movimiento_detalle(id, cantidad, costo_unitario, fecha_vencimiento, producto:producto_id(nombre, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
+             movimiento_detalle(id, cantidad, costo_unitario, fecha_vencimiento, lote_consumo(cantidad, lote:lote_id(fecha_vencimiento)), producto:producto_id(nombre, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
     .eq('id', id).maybeSingle()
   if (!data) notFound()
   type M = { id: string; nro: string | null; fecha: string; tipo: string; anulado: boolean; motivo_anulacion: string | null; anulado_at: string | null
     documento: string | null; observacion: string | null; recibe: string | null; referencia_tipo: string | null; referencia_id: string | null; almacen_id: string
     almacen: { nombre: string }; local: { codigo: string; nombre: string }; area: { nombre: string } | null
-    movimiento_detalle: { id: string; cantidad: number; costo_unitario: number | null; fecha_vencimiento: string | null; producto: { nombre: string; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } }[] }
+    movimiento_detalle: { id: string; cantidad: number; costo_unitario: number | null; fecha_vencimiento: string | null
+      lote_consumo: { cantidad: number; lote: { fecha_vencimiento: string | null } | null }[]; producto: { nombre: string; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } }[] }
   const m = data as unknown as M
   // una entrada abierta desde /salidas (o al revés): a su historial correcto
   const suSentido: Sentido = TIPOS_DE.entrada.includes(m.tipo) ? 'entrada' : 'salida'
@@ -33,7 +34,13 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
   const ruta = sentido === 'entrada' ? '/entradas' : '/salidas'
   const puedeAnular = panel === 'almacen' && !soloConsulta(sel) && !m.anulado && (m.referencia_tipo === 'manual' || !m.referencia_tipo) && m.tipo !== 'stock_inicial'
   const total = m.movimiento_detalle.reduce((s, d) => s + Number(d.cantidad) * Number(d.costo_unitario ?? 0), 0)
-  const hayVence = m.movimiento_detalle.some((d) => d.fecha_vencimiento)
+  // vencimiento de lo que se entregó: en la entrada, el de la línea; en la salida, el de los lotes que descontó (el que vence antes)
+  const vence = (d: M['movimiento_detalle'][number]) => {
+    if (sentido === 'entrada') return d.fecha_vencimiento ? fmtDate(d.fecha_vencimiento) : ''
+    const con = d.lote_consumo.filter((c) => c.lote?.fecha_vencimiento)
+    return con.map((c) => fmtDate(c.lote!.fecha_vencimiento) + (d.lote_consumo.length > 1 ? ` (${fmtQty(c.cantidad)})` : '')).join(' · ')
+  }
+  const hayVence = m.movimiento_detalle.some((d) => vence(d))
   const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : m.referencia_tipo === 'conteo' ? `/conteos/${m.referencia_id}` : null
   const conTicket = m.tipo === 'salida_consumo' && !m.anulado
 
@@ -43,7 +50,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
     ['Almacén', m.almacen.nombre],
     ...(m.area ? [[sentido === 'entrada' ? 'Área que devuelve' : 'Área destino', m.area.nombre] as [string, string]] : []),
     ...(m.recibe ? [['Entregado a', m.recibe] as [string, string]] : []),
-    ...(m.documento ? [['Documento', origen ? <Link key="d" href={origen} className="font-semibold text-brand-600">{m.documento}</Link> : m.documento] as [string, React.ReactNode]] : []),
+    ...(m.documento ? [['Documento', origen ? <Link key="d" href={origen} className="font-semibold text-brand-600">{m.documento.toUpperCase()}</Link> : m.documento.toUpperCase()] as [string, React.ReactNode]] : []),
     ...(m.observacion ? [['Observación', m.observacion] as [string, string]] : []),
   ]
 
@@ -55,7 +62,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
             <TicketButton auto={imprimir} label="Imprimir ticket" data={{
               logo: LOGO_DOC[m.local.codigo], negocio: m.local.nombre, titulo: 'Comprobante de salida de almacén', numero: m.nro ?? '',
               datos: [['Fecha', fmtDate(m.fecha, true)], ['Almacén', m.almacen.nombre], ['Área destino', m.area?.nombre ?? '—']],
-              items: m.movimiento_detalle.map((d) => ({ descripcion: d.producto.nombre, cantidad: fmtQty(d.cantidad), unidad: d.producto.unidad.codigo })),
+              items: m.movimiento_detalle.map((d) => ({ descripcion: d.producto.nombre + (vence(d) ? ` · Vence ${vence(d)}` : ''), cantidad: fmtQty(d.cantidad), unidad: d.producto.unidad.codigo })),
               observacion: m.observacion, firmas: [{ nombre: m.recibe, etiqueta: 'Recibí conforme' }],
             }} />
           )}
@@ -85,7 +92,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
                 <Td right>{fmtQty(d.cantidad)} <span className="text-xs text-muted">{d.producto.unidad.codigo}</span></Td>
                 <Td right>{fmtSoles(d.costo_unitario)}</Td>
                 <Td right className="font-semibold">{fmtSoles(Number(d.cantidad) * Number(d.costo_unitario ?? 0))}</Td>
-                {hayVence && <Td className="tabular">{fmtDate(d.fecha_vencimiento)}</Td>}
+                {hayVence && <Td className="tabular">{vence(d) || '—'}</Td>}
               </tr>
             ))}
           </tbody>

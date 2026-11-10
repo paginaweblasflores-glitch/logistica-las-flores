@@ -77,10 +77,10 @@ export function ProveedorPicker({ name, proveedores, defaultValue, required, onC
           {nuevo ? (
             <div className="space-y-3 p-3">
               <p className="text-sm font-semibold">Registrar proveedor nuevo</p>
-              <label className="block"><span className="label">Nombre *</span>
+              <label className="block"><span className="label">Nombre <span className="req">*</span></span>
                 <input autoFocus value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} className="field" /></label>
               <div className="grid gap-1.5">
-                <span className="label">Tipo *</span>
+                <span className="label">Tipo <span className="req">*</span></span>
                 {TIPOS.map((t) => (
                   <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50">
                     <input type="radio" checked={nuevo.tipo === t.id} onChange={() => setNuevo({ ...nuevo, tipo: t.id })} className="size-4 accent-brand-600" />

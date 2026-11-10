@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [usuario, ambito] = await Promise.all([getUsuario(), getAmbito()])
   const panel = panelDe(usuario.rol)
   const almacenSel = await getAlmacenActivo()
-  const avisos = panel === 'area' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
+  const avisos = panel === 'area' || panel === 'produccion' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
   // Cada panel abre solo sus pantallas (p. ej. el almacén no entra a Descuentos; Logística no registra salidas)
   if (!rutaPermitida(panel, (await headers()).get('x-pathname'))) redirect(inicioDe(panel))
   const fecha = new Date().toLocaleDateString('es-PE', {
@@ -21,11 +21,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   })
   return (
     <div className="min-h-dvh">
-      <Sidebar panel={panel} subtitulo={panel === 'almacen' ? `Almacén ${ambito.local?.codigo === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : 'Logística'} />
+      <Sidebar panel={panel} subtitulo={panel === 'almacen' ? `Almacén ${ambito.local?.codigo === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : panel === 'produccion' ? 'Producción' : 'Logística'} />
       <div className="lg:pl-56 print:pl-0">
         <Topbar
           ambito={ambito.codigo}
-          ambitoFijo={ambito.fijo || panel === 'area'}
+          ambitoFijo={ambito.fijo || panel === 'area' || panel === 'produccion'}
           locales={ambito.locales.map((l) => ({ codigo: l.codigo, nombre: l.nombre, titulo: etiquetaNegocio(l) }))}
           usuario={{ nombre: usuario.nombre, rol: usuario.rol }}
           avisos={avisos}

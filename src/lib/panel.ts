@@ -5,13 +5,15 @@
  *  - almacén: un usuario por negocio (Almacén Las Flores / Almacén Umaru). Registra entradas, salidas,
  *    traspasos, recepción de compras, controles (carnes, bebidas, roturas) y su catálogo local.
  *  - área: usuario compartido "Jefe de Area" (el personal rota). Solo crea requerimientos y ve su estado.
+ *  - producción: el Área de Producción (carnes). Su kardex, venta del día, ingresos de proveedores y diagrama,
+ *    con productos y proveedores PROPIOS (no se mezclan con el almacén). Logística solo ve sus reportes.
  */
-export type Panel = 'logistica' | 'almacen' | 'area'
+export type Panel = 'logistica' | 'almacen' | 'area' | 'produccion'
 
-export const panelDe = (rol: string): Panel => (rol === 'almacen' ? 'almacen' : rol === 'jefe_area' ? 'area' : 'logistica')
+export const panelDe = (rol: string): Panel => (rol === 'almacen' ? 'almacen' : rol === 'jefe_area' ? 'area' : rol === 'produccion' ? 'produccion' : 'logistica')
 
 /** Pantalla de inicio de cada panel. */
-export const inicioDe = (panel: Panel) => (panel === 'area' ? '/requerimientos' : '/')
+export const inicioDe = (panel: Panel) => (panel === 'area' ? '/requerimientos' : panel === 'produccion' ? '/produccion' : '/')
 
 /** Rutas que solo abre Logística. */
 const SOLO_LOGISTICA = [
@@ -28,6 +30,9 @@ const coincide = (path: string, base: string) => path === base || path.startsWit
 export function rutaPermitida(panel: Panel, path: string | null) {
   if (!path) return true
   if (panel === 'area') return coincide(path, '/requerimientos')
+  if (panel === 'produccion') return coincide(path, '/produccion')
+  // de Producción, Logística solo abre los reportes (el registro es del área)
+  if (coincide(path, '/produccion')) return panel === 'logistica' && coincide(path, '/produccion/reportes')
   if (panel === 'almacen') return !SOLO_LOGISTICA.some((b) => coincide(path, b))
   return !SOLO_ALMACEN.some((b) => coincide(path, b))
 }

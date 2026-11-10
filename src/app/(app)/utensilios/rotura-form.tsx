@@ -36,7 +36,7 @@ export function RoturaForm({ locales, areas, almacenes, personal, localDefault, 
         <div className="md:col-span-2"><span className="label">Bien (catálogo)</span>
           <input type="hidden" name="producto" value={prod?.id ?? ''} />
           {prod ? (
-            <div className="flex h-9 items-center justify-between rounded-lg border border-line px-3 text-sm"><b>{prod.nombre}</b>
+            <div className="flex h-10 items-center justify-between rounded-lg border border-field px-3 text-sm"><b>{prod.nombre}</b>
               <button type="button" className="text-xs text-brand-600" onClick={() => setProd(null)}>Cambiar</button></div>
           ) : <ProductPicker tipos={['utensilio', 'activo']} onSelect={(p) => { setProd(p); setPrecio(String(p.costo_referencia || '')) }} placeholder="Buscar vaso, plato, copa…" />}
         </div>

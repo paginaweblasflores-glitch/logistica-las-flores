@@ -105,7 +105,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
           <ExportButton filename="ingresos_almacen" table="v_ingreso_almacen" order="fecha_ingreso" dateColumn="fecha_ingreso" desde={desde} hasta={hasta}
             filters={{ local_id: local?.id, almacen_id: almacenId || undefined, fuera_de_catalogo: 'false' }}
             columns={{ fecha_ingreso: 'Fecha', local_codigo: 'Negocio', almacen: 'Almacén', numero: 'N° ingreso / compra', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
-              producto: 'Producto', marca: 'Marca', presentacion: 'Presentación', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unidad', total: 'Total', precio_orden: 'Precio en la orden', recibido_por: 'Registró' }} />
+              producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unidad', total: 'Total', precio_orden: 'Precio en la orden', recibido_por: 'Registró' }} />
           {almacen && !soloConsulta(sel) && <LinkButton href="/entradas/nueva?tipo=compra"><Plus className="size-4" /> Registrar ingreso</LinkButton>}
         </>} />
 
@@ -140,7 +140,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
                   <span className="block text-muted capitalize">{r.tipo_documento ?? '—'} {r.numero_documento ?? ''}</span></Td>
                 <Td className="text-xs">{r.proveedor ?? '—'}{r.recibido_por && <span className="block text-muted">Registró {r.recibido_por}</span>}</Td>
                 <Td><span className="font-medium">{r.producto}</span>
-                  <span className="block text-xs text-muted">{[r.marca, r.presentacion].filter(Boolean).join(' · ') || (r.fuera_de_catalogo ? 'Fuera de catálogo' : almacen ? `Cód. ${r.codigo_almacen ?? '—'}` : r.producto_codigo)}</span></Td>
+                  <span className="block text-xs text-muted">{r.marca || (r.fuera_de_catalogo ? 'Fuera de catálogo' : almacen ? `Cód. ${r.codigo_almacen ?? '—'}` : r.producto_codigo)}</span></Td>
                 <Td right className="tabular whitespace-nowrap">{fmtQty(r.cantidad)} {r.unidad}</Td>
                 <Td right className="tabular">{fmtSoles(r.precio_unitario)}{r.diferencia_precio && <span className="block text-[11px] text-muted">orden {fmtSoles(r.precio_orden)}</span>}</Td>
                 <Td right className="font-semibold tabular">{fmtSoles(r.total)}</Td>

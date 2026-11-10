@@ -1,14 +1,14 @@
 import { AvisoStockDia } from '@/components/aviso-stock-dia'
 import Link from 'next/link'
-import { ArrowLeftRight, Boxes, ChevronRight, ClipboardList, PackageCheck, PackageX, History, Plus } from 'lucide-react'
+import { Boxes, ChevronRight, ClipboardList, PackageCheck, PackageX, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import type { Local } from '@/lib/session'
 import { etiquetaNegocio } from '@/lib/empresa'
 import { fmtDate, fmtQty, fmtSoles, inicioMes } from '@/lib/format'
-import { PageHeader, Section, Stat, Table, Th, Td, Badge, EmptyState, LinkButton } from '@/components/ui'
+import { PageHeader, Section, Stat, Table, Th, Td, Badge, EmptyState } from '@/components/ui'
 import { ProductoFoto } from '@/components/producto-foto'
 import { getAlmacenes } from '@/lib/queries'
-import { getAlmacenActivo, soloConsulta } from '@/lib/session'
+import { getAlmacenActivo } from '@/lib/session'
 
 /** Inicio del panel de almacén: el estado de SU almacén y lo que tiene pendiente hoy. */
 export async function PanelAlmacen({ local }: { local: Local }) {
@@ -63,15 +63,7 @@ export async function PanelAlmacen({ local }: { local: Local }) {
   return (
     <>
       <PageHeader title={sel.actual && sel.lista.length > 1 ? sel.actual.corto : `Almacén ${local.codigo === 'UM' ? 'Hotel Umaru' : 'Restaurante Las Flores'}`}
-        description={`${etiquetaNegocio(local)} · Estado de sus almacenes y lo que tiene pendiente.`}
-        actions={<>
-          {/* con «Todos» solo se consulta: para registrar se elige el almacén arriba */}
-          {!soloConsulta(sel) && <>
-            <LinkButton href="/traslados/nuevo" variant="outline"><ArrowLeftRight className="size-4" /> Enviar traspaso</LinkButton>
-            <LinkButton href="/entradas/nueva" variant="outline"><Plus className="size-4" /> Nueva entrada</LinkButton>
-            <LinkButton href="/salidas/nueva"><Plus className="size-4" /> Nueva salida</LinkButton>
-          </>}
-        </>} />
+        description={etiquetaNegocio(local)} />
 
       <AvisoStockDia />
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
@@ -148,7 +140,7 @@ export async function PanelAlmacen({ local }: { local: Local }) {
                   <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`/${m.tipo_mov.signo > 0 ? 'entradas' : 'salidas'}/${m.id}`} className="text-brand-600">{m.nro ?? m.numero}</Link></Td>
                   <Td className="whitespace-nowrap tabular">{fmtDate(m.fecha, true)}</Td>
                   <Td><Badge tone={m.tipo_mov.signo > 0 ? 'green' : 'red'}>{m.tipo_mov.signo > 0 ? '▲' : '▼'} {m.tipo_mov.nombre}</Badge></Td>
-                  <Td className="text-xs">{m.documento ?? m.observacion ?? '—'}<span className="block text-muted">{m.almacen.nombre}</span></Td>
+                  <Td className="text-xs">{m.documento?.toUpperCase() ?? m.observacion ?? '—'}<span className="block text-muted">{m.almacen.nombre}</span></Td>
                   <Td right>{m.movimiento_detalle[0]?.count ?? 0}</Td>
                 </tr>
               ))}</tbody>

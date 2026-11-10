@@ -10,7 +10,11 @@ import { btnClass } from '@/components/ui'
  * Exporta una vista/tabla a Excel (.xlsx) respetando filtros de igualdad y rango de fechas.
  * Descarga en páginas de 1 000 filas para soportar grandes volúmenes.
  */
-export function ExportButton({ filename, table, columns, filters = {}, dateColumn, desde, hasta, order, label = 'Excel' }: {
+export function ExportButton({ filename, table, columns, filters = {}, dateColumn, desde, hasta, order, desc = false, pie, label = 'Excel' }: {
+  /** lo más reciente primero (como en pantalla) */
+  desc?: boolean
+  /** filas de resumen al final, separadas por una fila vacía (p. ej. [['Stock total', '5 sacos']]) */
+  pie?: [string, string | number][]
   label?: string
   filename: string
   table: string
@@ -33,7 +37,7 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
         for (const [k, v] of Object.entries(filters)) if (v) q = q.eq(k, v)
         if (dateColumn && desde) q = q.gte(dateColumn, desde)
         if (dateColumn && hasta) q = q.lte(dateColumn, `${hasta}T23:59:59`)
-        if (order) q = q.order(order)
+        if (order) q = q.order(order, { ascending: !desc })
         const { data, error } = await q.range(from, from + 999)
         if (error) throw error
         rows.push(...((data ?? []) as unknown as Record<string, unknown>[]))
@@ -44,6 +48,7 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
         const v = r[k]
         return [label, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]
       }))))
+      if (pie?.length) XLSX.utils.sheet_add_aoa(sheet, [[], ...pie], { origin: -1 })
       sheet['!cols'] = Object.values(columns).map((c) => ({ wch: Math.max(12, c.length + 4) }))
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, sheet, filename.slice(0, 31))

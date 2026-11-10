@@ -93,7 +93,7 @@ export function HojaConteo({ conteoId, rows, modo, editable }: {
           ))}
         </div>
         {modo === 'conteo' && (
-          <button type="button" onClick={() => setCiego((c) => !c)} className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-xs font-semibold">
+          <button type="button" onClick={() => setCiego((c) => !c)} className="flex h-10 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-xs font-semibold">
             {ciego ? <EyeOff className="size-4" /> : <Eye className="size-4" />} {ciego ? 'Conteo a ciegas' : 'Mostrando sistema'}
           </button>
         )}

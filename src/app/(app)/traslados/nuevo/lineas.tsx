@@ -8,6 +8,9 @@ export function TrasladoLineas({ almacenId }: { almacenId?: string | null }) {
       name="lineas"
       almacenId={almacenId}
       totalKey="cantidad"
+      mostrarStock
+      mostrarVence
+      topeStock
       fields={[
         { key: 'cantidad', label: 'Cantidad', required: true, width: '120px' },
         // cualquier unidad: las que se convierten solas (sacos ↔ kilos) o cajas, paquetes… indicando cuánto trae

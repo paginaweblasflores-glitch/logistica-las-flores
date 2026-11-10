@@ -48,7 +48,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const anio = Number(periodo.hasta.slice(0, 4))
   const supabase = await createClient()
 
-  const [dash, mensual, topProv, variacion, criticos, kpiInv] = await Promise.all([
+  const [dash, mensual, topProv, variacion, criticos, kpiInv, vencidosQ] = await Promise.all([
     supabase.rpc('fn_dashboard', { p_local: pLocal, p_desde: periodo.desde, p_hasta: periodo.hasta }),
     supabase.rpc('fn_compras_mensual', { p_local: pLocal, p_anio: anio }),
     supabase.rpc('fn_top_proveedores', { p_local: pLocal, p_desde: periodo.desde, p_hasta: periodo.hasta, p_limite: 5 }),
@@ -57,7 +57,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .in('estado', ['critico', 'agotado']).gt('stock_minimo', 0).order('cantidad').limit(5)
       if (pLocal) q = q.eq('local_id', pLocal); return q })(),
     supabase.rpc('fn_kpi_inventario_mensual', { p_local: pLocal, p_anio: anio }),
+    // lotes vencidos que siguen en el almacén (la meta es que no haya ninguno)
+    (() => { let q = supabase.from('v_lote_fifo').select('cantidad_disponible, costo_unitario').eq('estado', 'vencido')
+      if (pLocal) q = q.eq('local_id', pLocal); return q })(),
   ])
+  const vencidos = (vencidosQ.data ?? []) as { cantidad_disponible: number; costo_unitario: number }[]
+  const valorVencido = vencidos.reduce((s, x) => s + Number(x.cantidad_disponible) * Number(x.costo_unitario), 0)
 
   const d = (dash.data ?? {}) as Dashboard
   if (dash.error || !d.stock) {
@@ -119,8 +124,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               hint={`Meta ≥ ${fmtPct(d.otif.meta)} · a tiempo y completo · ${d.otif.pedidos} pedidos`} />
         <Stat label="Diferencia de inventario" value={fmtPct(d.inventario.pct_diferencia)} meta={{ valor: d.inventario.pct_diferencia, meta: d.inventario.meta, menorEsMejor: true }}
               hint={`Meta ≤ ${fmtPct(d.inventario.meta)} · ${d.inventario.conteos} conteos`} />
-        <Stat label="Cumplimiento FIFO" value={fmtPct(d.fifo.cumplimiento)} meta={{ valor: d.fifo.cumplimiento, meta: 1 }}
-              hint={`Meta 100% · ${d.fifo.salidas} salidas de perecibles`} />
+        <Stat label="Vencidos con stock" value={vencidos.length} tone={vencidos.length ? 'bad' : 'good'}
+              hint={`Meta 0 · ${fmtSolesCompact(valorVencido)} en el almacén`} />
         <Stat label="Ahorro en compras" value={fmtPct(c.ahorro_neto_pct)} meta={{ valor: c.ahorro_neto_pct, meta: 0.05 }}
               hint={<>Meta ≥ 5% · ahorro {fmtSolesCompact(c.ahorro)} · sobrecosto {fmtSolesCompact(c.sobrecosto)}</>} />
         <Stat label="Requerimientos < 24 h" value={fmtPct(d.requerimientos.pct_24h)} meta={{ valor: d.requerimientos.pct_24h, meta: 1 }}

@@ -8,8 +8,8 @@ import { PageHeader, Section, EstadoBadge, Stat, LinkButton, Table, Th, Td } fro
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { comprarDesdeCotizacion } from '../actions'
-import { CotizacionesAnteriores, type Anterior } from './anteriores'
-import { OfertaForm } from './oferta-form'
+import type { Anterior } from './anteriores'
+import { RegistroOferta } from './registro'
 import { Comparativo, type OfertaCmp } from './comparativo'
 import { nombreOferta } from '@/lib/proveedor-tipo'
 
@@ -73,7 +73,7 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
         actions={<><EstadoBadge estado={c.estado} />
           {delAlmacen && pendientes > 0 && (
             <ActionForm action={comprarDesdeCotizacion}><input type="hidden" name="cotizacion_id" value={id} />
-              <SubmitButton confirm={partes.length > 1 ? `¿Marcar como comprado? Se registran ${partes.length} compras (una por proveedor). El almacén las verá en Entradas y pondrá los precios de la boleta.` : '¿Marcar como comprado? El almacén la verá en Entradas y pondrá los precios de la boleta.'}>Comprado</SubmitButton></ActionForm>
+              <SubmitButton confirm={partes.length > 1 ? `¿Marcar como comprado? Se registran ${partes.length} compras (una por proveedor). El almacén las verá en Entradas y pondrá los precios de la boleta.` : '¿Marcar como comprado? El almacén la verá en Entradas y pondrá los precios de la boleta.'}>Comprar</SubmitButton></ActionForm>
           )}
           {!delAlmacen && partes.length === 1 && !partes[0].compra && <LinkButton href={`/compras/nueva?cotizacion=${id}&oferta=${partes[0].oferta.id}`}>Generar compra</LinkButton>}
           {partes.length === 1 && partes[0].compra && <LinkButton href={`/compras/${partes[0].compra.id}`} variant="outline">Ver compra {partes[0].compra.numero}</LinkButton>}</>} />
@@ -97,6 +97,14 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
         </div>
       ) : null}
 
+
+      {/* el ganador anterior de cada producto y el registro de ofertas comparten las casillas «Productos a cotizar» */}
+      {c.estado === 'abierta' && (
+        <RegistroOferta cotizacionId={id} proveedores={proveedores} anteriores={(anteriores ?? []) as Anterior[]}
+          cargados={ofs.filter((o) => o.observacion === 'Precios de una cotización anterior').map((o) => `${o.proveedor_id}|${o.canal ?? 'tienda'}`)}
+          items={its.map((i) => ({ id: i.id, descripcion: i.descripcion, cantidad: Number(i.cantidad), unidad: i.unidad,
+            cantidadPedida: i.cantidad_pedida === null ? null : Number(i.cantidad_pedida), unidadPedido: i.unidad_pedido, factor: Number(i.factor || 1) }))} />
+      )}
       {/* adjudicada: ya no el cuadro, sino lo que ganó cada proveedor y su compra */}
       {c.estado === 'adjudicada' ? (
         <Section icon={ShoppingCart} title="Productos adjudicados" className="print-area mb-5" bodyClassName="p-0">
@@ -134,16 +142,6 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
                 cantidadPedida: i.cantidad_pedida === null ? null : Number(i.cantidad_pedida), unidadPedido: i.unidad_pedido, factor: Number(i.factor || 1) }))} />
           : <div className="p-6 text-sm text-muted">Aún no hay ofertas. Registre la primera cotización de un proveedor.</div>}
       </Section>
-      )}
-
-      {c.estado === 'abierta' && (anteriores ?? []).length > 0 && (
-        <CotizacionesAnteriores cotizacionId={id} anteriores={(anteriores ?? []) as Anterior[]} items={its.map((i) => ({ id: i.id, descripcion: i.descripcion }))} />
-      )}
-      {c.estado === 'abierta' && (
-        <Section title="Registrar oferta / nueva ronda" className="no-print">
-          <OfertaForm cotizacionId={id} proveedores={proveedores} items={its.map((i) => ({ id: i.id, descripcion: i.descripcion, cantidad: Number(i.cantidad), unidad: i.unidad,
-            cantidadPedida: i.cantidad_pedida === null ? null : Number(i.cantidad_pedida), unidadPedido: i.unidad_pedido, factor: Number(i.factor || 1) }))} />
-        </Section>
       )}
     </>
   )

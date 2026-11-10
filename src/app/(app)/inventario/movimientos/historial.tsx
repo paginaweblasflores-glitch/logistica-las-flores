@@ -76,8 +76,8 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
                         {m.anulado && m.motivo_anulacion && <span className="block text-xs text-brand-700">Anulado: {m.motivo_anulacion}</span>}</Td>
                       {varios && <Td className="text-sm">{m.almacen.nombre}</Td>}
                       {entrada
-                        ? <Td className="text-sm">{origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento ?? 'Ver origen'}</Link> : m.area?.nombre ?? m.documento ?? m.observacion ?? '—'}</Td>
-                        : <><Td className="text-sm">{m.area?.nombre ?? (origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento ?? 'Ver origen'}</Link> : '—')}</Td><Td className="text-sm">{m.recibe ?? '—'}</Td></>}
+                        ? <Td className="text-sm">{origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : m.area?.nombre ?? m.documento?.toUpperCase() ?? m.observacion ?? '—'}</Td>
+                        : <><Td className="text-sm">{m.area?.nombre ?? (origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : '—')}</Td><Td className="text-sm">{m.recibe ?? '—'}</Td></>}
                       <Td right>{m.movimiento_detalle.length}</Td>
                       <Td right className="font-semibold">{fmtSoles(valor)}</Td>
                       <Td>

@@ -21,8 +21,9 @@ export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise
     const supabase = await createClient()
 
     // Stock actual en el almacén principal del negocio (se guarda como referencia)
+    // (las áreas escriben sus bienes: sin productos del catálogo no hay stock que consultar)
     const ids = lineas.map((l) => l.producto_id).filter(Boolean) as string[]
-    const { data: alm } = await supabase.from('almacen').select('id').eq('local_id', localId).eq('es_principal', true).maybeSingle()
+    const { data: alm } = ids.length ? await supabase.from('almacen').select('id').eq('local_id', localId).eq('es_principal', true).maybeSingle() : { data: null }
     const stock = new Map<string, number>()
     if (ids.length && alm) {
       const { data } = await supabase.from('stock').select('producto_id, cantidad').eq('almacen_id', alm.id).in('producto_id', ids)
@@ -41,6 +42,8 @@ export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise
       precio_estimado: num(l.precio_estimado), motivo: l.motivo || null,
       marca: l.marca || null, area_destino: l.area_destino ? String(l.area_destino).toUpperCase() : null,
       imagen: fotoValida(l.imagen) ? l.imagen : null,
+      // la unidad en que lo pide el área (Unidad, Caja, Kilo…)
+      unidad_pedido_id: l.unidad_id || null, cantidad_pedida: l.unidad_id ? num(l.cantidad) : null,
     }))))
     revalidatePath('/requerimientos')
     redirect(`/requerimientos/${req.id}`)
@@ -142,7 +145,7 @@ export async function cotizarRequerimiento(_: ActionResult, fd: FormData): Promi
     // Solo lo aprobado pasa a cotización (si aún no se aprobó, se cotiza lo solicitado)
     check(await supabase.from('cotizacion_item').insert(((r!.requerimiento_detalle ?? []) as unknown as D[]).filter((d) => d.cantidad_aprobada === null || Number(d.cantidad_aprobada) > 0).map((d) => ({
       cotizacion_id: cot.id, requerimiento_detalle_id: d.id, producto_id: d.producto_id, descripcion: d.descripcion,
-      cantidad: d.cantidad_aprobada ?? d.cantidad_solicitada, unidad: d.producto?.unidad.codigo ?? 'UND',
+      cantidad: d.cantidad_aprobada ?? d.cantidad_solicitada, unidad: d.producto?.unidad.codigo ?? d.pedida?.nombre ?? 'UND',
       ...(factor(d) !== 1 ? { factor: factor(d), unidad_pedido: d.pedida!.nombre, cantidad_pedida: Math.round(Number(d.cantidad_aprobada ?? d.cantidad_solicitada) / factor(d) * 10000) / 10000 } : {}),
     }))))
     check(await supabase.from('requerimiento').update({ estado: 'en_cotizacion' }).eq('id', id))

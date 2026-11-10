@@ -32,12 +32,13 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
   else if (local) q = q.eq('local_id', local.id)
   // movimientos, almacenes y el producto elegido: al mismo tiempo
   const [{ data, error }, almacenes, { data: pData }] = await Promise.all([
-    soloProducto ? Promise.resolve({ data: [], error: null }) : q.order('fecha', { ascending: !!producto }).order('numero', { ascending: !!producto }).limit(producto ? 2000 : 200),
+    soloProducto ? Promise.resolve({ data: [], error: null }) : q.order('fecha', { ascending: false }).order('numero', { ascending: false }).limit(producto ? 2000 : 200),
     getAlmacenes(local?.id),
-    producto ? supabase.from('producto').select('id, codigo, nombre, tipo, costo_referencia, unidad:unidad_id(codigo)').eq('id', producto).maybeSingle() : Promise.resolve({ data: null }),
+    producto ? supabase.from('producto').select('id, codigo, nombre, tipo, costo_referencia, unidad:unidad_id(codigo, nombre)').eq('id', producto).maybeSingle() : Promise.resolve({ data: null }),
   ])
   let prod: ProductoLite | null = null
-  if (pData) { const d = pData as unknown as ProductoLite & { unidad: { codigo: string } }; prod = { ...d, unidad: d.unidad.codigo } }
+  let unidadNombre = ''
+  if (pData) { const d = pData as unknown as ProductoLite & { unidad: { codigo: string; nombre: string } }; prod = { ...d, unidad: d.unidad.codigo }; unidadNombre = d.unidad.nombre }
 
   type Row = { detalle_id: string; movimiento_id: string; numero: number; nro: string | null; fecha: string; tipo_nombre: string; signo: number; almacen_nombre: string
     motivo_nombre: string | null; referencia_tipo: string | null; referencia_id: string | null; documento: string | null; observacion: string | null
@@ -46,15 +47,17 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
   const rows = (data ?? []) as unknown as Row[]
   const totEntrada = rows.reduce((s, r) => s + Number(r.entrada ?? 0), 0)
   const totSalida = rows.reduce((s, r) => s + Number(r.salida ?? 0), 0)
-  const saldoFinal = producto && almacen && rows.length ? rows[rows.length - 1].saldo : null
+  // lo último arriba: el stock actual es el de la primera fila
+  const saldoFinal = producto && almacen && rows.length ? rows[0].saldo : null
 
   return (
     <>
       <PageHeader title="Kardex" back={panel === 'almacen' ? { href: '/inventario', label: 'Stock' } : undefined}
-        description={panel === 'almacen' ? 'Historial del producto: todo lo que entró y salió, y cómo fue quedando la cantidad.' : 'Historial de movimientos con saldo acumulado. Seleccione producto y almacén para ver el Kardex valorizado completo.'}
-        actions={<ExportButton filename="kardex" table="v_kardex" dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
+        description={panel === 'almacen' ? 'Historial del producto: todo lo que entró y salió.' : 'Historial de movimientos. Seleccione producto y almacén para ver el Kardex valorizado completo.'}
+        actions={<ExportButton filename="kardex" table="v_kardex" dateColumn="fecha" desde={desde} hasta={hasta} order="fecha" desc
+          pie={saldoFinal !== null ? [['Stock total', `${fmtQty(saldoFinal)} ${plural(unidadNombre || prod?.unidad || '', saldoFinal)}`]] : undefined}
           filters={{ producto_id: producto || undefined, almacen_id: almacen || undefined, local_id: !almacen ? local?.id : undefined }}
-          columns={{ fecha: 'Fecha', nro: 'N°', tipo_nombre: 'Tipo', motivo_nombre: 'Concepto', almacen_nombre: 'Almacén', producto_nombre: 'Producto', unidad: 'Unidad', entrada: 'Ingreso', salida: 'Salida', saldo: 'Saldo', costo_unitario: 'Costo unit.', importe: 'Importe', documento: 'Documento', observacion: 'Observación' }} />} />
+          columns={{ fecha: 'Fecha', nro: 'N°', tipo_nombre: 'Tipo', motivo_nombre: 'Concepto', almacen_nombre: 'Almacén', producto_nombre: 'Producto', unidad: 'Unidad', entrada: 'Ingreso', salida: 'Salida', costo_unitario: 'Costo unit.', importe: 'Importe', documento: 'Documento', observacion: 'Observación' }} />} />
 
       <FilterBar>
         <FilterField label="Producto" className="min-w-72"><ProductPicker name="producto" defaultValue={prod} almacenId={sel.id} /></FilterField>
@@ -69,11 +72,11 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
 
       {!soloProducto && <Section icon={ScrollText} title={prod ? `Kardex — ${rows[0]?.codigo_almacen != null ? `Cód. ${rows[0].codigo_almacen} · ` : ''}${prod.nombre}` : 'Movimientos recientes'} bodyClassName="p-0"
         stats={[{ label: 'Ingresos', value: fmtQty(totEntrada) }, { label: 'Salidas', value: fmtQty(totSalida) },
-                ...(saldoFinal !== null ? [{ label: 'Saldo', value: `${fmtQty(saldoFinal)} ${prod?.unidad ?? ''}` }] : [])]}>
+                ...(saldoFinal !== null ? [{ label: 'Stock', value: `${fmtQty(saldoFinal)} ${plural(unidadNombre || prod?.unidad || '', saldoFinal)}` }] : [])]}>
         {rows.length ? (
           <PagedTable head={<tr>
               <Th>Fecha</Th><Th>N°</Th><Th>Concepto</Th>{!producto && <><Th right>Cód.</Th><Th>Producto</Th></>}<Th>Almacén</Th>
-              <Th right>Ingreso</Th><Th right>Salida</Th>{producto && <Th right>Saldo</Th>}<Th right>Costo</Th><Th right>Importe</Th><Th>Documento</Th>
+              <Th right>Ingreso</Th><Th right>Salida</Th><Th right>Costo</Th><Th right>Importe</Th><Th>Documento</Th>
             </tr>}>
               {rows.map((r) => (
                 <tr key={r.detalle_id} className="hover:bg-canvas/60">
@@ -89,13 +92,12 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
                   <Td className="text-xs">{r.almacen_nombre}</Td>
                   <Td right className="text-leaf-600">{r.entrada ? fmtQty(r.entrada) : ''}</Td>
                   <Td right className="text-brand-700">{r.salida ? fmtQty(r.salida) : ''}</Td>
-                  {producto && <Td right className="font-bold">{fmtQty(r.saldo)}</Td>}
                   <Td right className="text-muted">{fmtSoles(r.costo_unitario)}</Td>
                   <Td right>{fmtSoles(r.importe)}</Td>
                   <Td className="text-xs">
                     {r.referencia_tipo && REF_LINK[r.referencia_tipo] && r.referencia_id
-                      ? <Link href={REF_LINK[r.referencia_tipo] + r.referencia_id} className="font-semibold text-brand-600">{r.documento ?? r.referencia_tipo}</Link>
-                      : <span className="text-muted">{r.documento ?? r.observacion ?? ''}</span>}
+                      ? <Link href={REF_LINK[r.referencia_tipo] + r.referencia_id} className="font-semibold text-brand-600">{r.documento?.toUpperCase() ?? r.referencia_tipo}</Link>
+                      : <span className="text-muted">{r.documento?.toUpperCase() ?? r.observacion ?? ''}</span>}
                   </Td>
                 </tr>
               ))}
@@ -106,3 +108,10 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
   )
 }
 
+/** «1 saco», «5 sacos», «2 unidades» */
+function plural(nombre: string, n: number) {
+  const s = nombre.toLowerCase()
+  if (!s || Math.abs(n) === 1) return s
+  if (s.endsWith('ón')) return `${s.slice(0, -2)}ones`   // galón → galones
+  return /[aeiou]$/.test(s) ? `${s}s` : `${s}es`
+}

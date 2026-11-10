@@ -89,7 +89,7 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
                   <Td className="font-medium">{l.producto_nombre}</Td>
                   <Td right className="tabular">{fmtQty(l.entrada ?? l.salida)} <span className="text-xs text-muted">{l.unidad}</span></Td>
                   <Td right>{fmtSoles(l.importe)}</Td>
-                  <Td className="text-xs">{l.documento ?? '—'}<span className="block text-muted">{l.motivo_nombre ?? l.observacion ?? ''}</span></Td>
+                  <Td className="text-xs">{l.documento?.toUpperCase() ?? '—'}<span className="block text-muted">{l.motivo_nombre ?? l.observacion ?? ''}</span></Td>
                 </tr>
               ))}
             </PagedTable>

@@ -35,8 +35,8 @@ begin
   restart identity;
   -- tipos de entrada/salida escritos a mano en las pruebas (ya no los usa ningún movimiento)
   delete from motivo where codigo like 'TIPO-%';
-  -- numeración de documentos desde 1; se conserva la de productos (PROD y códigos por almacén COD-…)
-  delete from correlativo where serie <> 'PROD' and serie not like 'COD-%';
+  -- numeración de documentos desde 1; se conservan los códigos de productos (PROD, COD-… por negocio y ALM-… por almacén)
+  delete from correlativo where serie <> 'PROD' and serie not like 'COD-%' and serie not like 'ALM-%';
 end $$;
 
 -- Verificación: todo en cero, catálogo intacto

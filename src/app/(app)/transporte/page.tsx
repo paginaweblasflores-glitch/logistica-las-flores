@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito } from '@/lib/session'
 import { fmtDate, fmtPct, fmtSoles, hoyLima, MESES_CORTO } from '@/lib/format'
 import { sp } from '@/lib/utils'
-import { PageHeader, Section, Th, Td, FilterBar, FilterField, EmptyState, Stat, LocalBadge, Note } from '@/components/ui'
+import { PageHeader, Section, Th, Td, FilterBar, FilterField, EmptyState, Stat, LocalBadge } from '@/components/ui'
 import { Bars } from '@/components/charts'
 import { PagedTable } from '@/components/pager'
 
@@ -45,7 +45,6 @@ export default async function TransportePage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Transporte" description="Reporte del costo de los fletes: por mes, por transportista y cuánto representan sobre lo comprado. Se suma al costo real de cada compra." />
-      <div className="mb-4"><Note>Los fletes se registran en <b>cada compra</b> (sección «Transporte (opcional)»), por tramos: por ejemplo Shalom de Lima a la agencia y luego el taxi al local. Aquí solo se consultan.</Note></div>
       <FilterBar>
         <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
         <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>

@@ -30,11 +30,11 @@ export default async function NuevoTrasladoPage() {
           <div className="grid gap-4 md:grid-cols-3">
             {sel.actual
               ? <div><span className="label">Sale de</span><input type="hidden" name="origen" value={sel.actual.id} /><p className="field flex items-center bg-canvas font-semibold">{sel.actual.corto}</p></div>
-              : <label><span className="label">Sale de *</span><Select name="origen" options={origenes} required defaultValue={origenes.length === 1 ? origenes[0].id : undefined} placeholder="Seleccione…" /></label>}
-            <label><span className="label">Va a *</span><Select name="destino" options={todos.filter((a) => a.id !== sel.id)} required placeholder="Seleccione el almacén de destino…" /></label>
+              : <label><span className="label">Sale de <span className="req">*</span></span><Select name="origen" options={origenes} required defaultValue={origenes.length === 1 ? origenes[0].id : undefined} placeholder="Seleccione…" /></label>}
+            <label><span className="label">Va a <span className="req">*</span></span><Select name="destino" options={todos.filter((a) => a.id !== sel.id)} required placeholder="Seleccione el almacén de destino…" /></label>
             <label><span className="label">Fecha y hora</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
             {/* una sola firma: la de quien recibe (su nombre sale en el ticket y en el PDF) */}
-            <label><span className="label">Entregado a *</span><input name="recibe" required className="field" placeholder="Nombre de quien recibe" /></label>
+            <label><span className="label">Entregado a <span className="req">*</span></span><input name="recibe" required className="field" placeholder="Nombre de quien recibe" /></label>
           </div>
           <label className="mt-4 block"><span className="label">Motivo <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="motivo" className="field" placeholder="Reposición, préstamo, evento…" /></label>
         </Section>

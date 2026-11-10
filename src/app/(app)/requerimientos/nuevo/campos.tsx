@@ -13,10 +13,10 @@ export function NegocioArea({ locales, areas, localDefault }: { locales: Opcion[
   const opciones = areas.filter((a) => !a.local_id || a.local_id === local)
   return (
     <>
-      <label className="md:col-span-2"><span className="label">Negocio (empresa) *</span>
+      <label className="md:col-span-2"><span className="label">Negocio (empresa) <span className="req">*</span></span>
         <Select name="local" required value={local} onChange={setLocal} options={locales} placeholder="Seleccione…" />
       </label>
-      <label><span className="label">Área solicitante *</span>
+      <label><span className="label">Área solicitante <span className="req">*</span></span>
         <Select key={local} name="area" required disabled={!local} options={opciones} placeholder={local ? 'Seleccione…' : 'Elija el negocio primero'} agregar="area" local={local || null} />
       </label>
     </>

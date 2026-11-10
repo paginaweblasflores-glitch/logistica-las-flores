@@ -113,7 +113,7 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
       </div>
       {/* orden estándar: productos → datos de la boleta */}
       <div className="grid gap-4 pt-1 md:grid-cols-4">
-        <div className="md:col-span-2"><span className="label">Proveedor *</span><ProveedorPicker name="proveedor" proveedores={proveedores} defaultValue={proveedorId} required placeholder="Escriba para buscar: distraroj, backus…" /></div>
+        <div className="md:col-span-2"><span className="label">Proveedor <span className="req">*</span></span><ProveedorPicker name="proveedor" proveedores={proveedores} defaultValue={proveedorId} required placeholder="Escriba para buscar: distraroj, backus…" /></div>
         <label><span className="label">Comprobante</span>
           <Select name="tipo_documento" options={COMPROBANTES} defaultValue="boleta" required /></label>
         <label><span className="label">N° del comprobante</span><input name="numero_documento" className="field" placeholder="B001-000123" /></label>

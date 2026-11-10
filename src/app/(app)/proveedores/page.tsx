@@ -42,7 +42,7 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Proveedores" description="Base de datos única de proveedores con historial de compras y precios. Reemplaza la hoja “BASE DE DATOS PROVEEDORES”."
+      <PageHeader title="Proveedores" description="Base de datos única de proveedores con historial de compras y precios."
         actions={<>
           <ExportButton filename="proveedores" table="proveedor" order="razon_social"
             columns={{ ruc: 'RUC', razon_social: 'Razón social', subcategoria: 'Rubro', contacto: 'Contacto', telefono: 'Teléfono', email: 'Correo', forma_pedido: 'Forma de pedido', dias_pedido: 'Días de pedido', condiciones_pago: 'Condiciones de pago', fecha_registro: 'Fecha de registro', activo: 'Activo' }} />

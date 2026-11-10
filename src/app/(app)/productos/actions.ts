@@ -19,7 +19,7 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
     const precio = s('costo_referencia')
     // el tipo lo pone la base según la categoría; el código lo pone el sistema (correlativo)
     const datos = {
-      nombre, descripcion: s('descripcion'), categoria_id: s('categoria'), unidad_id: unidad, marca: s('marca'), presentacion: s('presentacion'),
+      nombre, descripcion: s('descripcion'), categoria_id: s('categoria'), unidad_id: unidad, marca: s('marca'),
       controla_lote: true,   // todos con FIFO: cada llegada es un lote y sale primero lo más antiguo
       // empaque (saco, caja…): cuánto trae cada uno; las unidades de medida no lo llevan
       contenido: fd.has('contenido') && Number(s('contenido')) > 0 ? Number(s('contenido')) : null,

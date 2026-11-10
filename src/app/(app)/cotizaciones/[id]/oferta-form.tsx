@@ -1,10 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { Check } from 'lucide-react'
+import { btnClass } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { fmtQty, fmtSoles } from '@/lib/format'
-import { registrarOferta } from '../actions'
+import { registrarOferta, usarPreciosAnteriores } from '../actions'
 import { ProveedorPicker, type ProveedorOpc } from '@/components/proveedor-picker'
 import { CANALES, canalSugerido, type Canal } from '@/lib/proveedor-tipo'
 
@@ -17,9 +21,20 @@ export type ItemOferta = { id: string; descripcion: string; cantidad: number; un
 
 const n = (v: string | undefined) => (v === undefined || v === '' ? null : Number(String(v).replace(',', '.')))
 
-export function OfertaForm({ cotizacionId, proveedores, items }: { cotizacionId: string; proveedores: ProveedorOpc[]; items: ItemOferta[] }) {
+export function OfertaForm({ cotizacionId, proveedores, items, marcados: marcadosExt, onMarcados, ganadores = {}, anterioresCargados = false }: { cotizacionId: string; proveedores: ProveedorOpc[]; items: ItemOferta[]
+  /** el ganador anterior de cada producto (si lo tiene): esos van en «Ya cotizados antes» */
+  ganadores?: Record<string, { proveedor: string; precio: number }>
+  /** ya se cargaron los precios de los ganadores anteriores */
+  anterioresCargados?: boolean
+  /** casillas «Productos a cotizar» controladas desde afuera (también filtran las cotizaciones anteriores) */
+  marcados?: Record<string, boolean>; onMarcados?: (m: Record<string, boolean>) => void }) {
   // productos que cotiza este proveedor (todos marcados al inicio)
-  const [marcados, setMarcados] = useState<Record<string, boolean>>(() => Object.fromEntries(items.map((i) => [i.id, true])))
+  const [marcadosInt, setMarcadosInt] = useState<Record<string, boolean>>(() => Object.fromEntries(items.map((i) => [i.id, !ganadores[i.id]])))
+  const marcados = marcadosExt ?? marcadosInt
+  const setMarcados = (v: Record<string, boolean> | ((m: Record<string, boolean>) => Record<string, boolean>)) => {
+    const nuevo = typeof v === 'function' ? v(marcados) : v
+    if (onMarcados) onMarcados(nuevo); else setMarcadosInt(nuevo)
+  }
   // precio por la unidad del pedido (saco) y, opcional, por unidad suelta
   const [precios, setPrecios] = useState<Record<string, string>>({})
   const [sueltos, setSueltos] = useState<Record<string, string>>({})
@@ -38,35 +53,49 @@ export function OfertaForm({ cotizacionId, proveedores, items }: { cotizacionId:
   const payload = Object.fromEntries(items.filter((i) => marcados[i.id] && porUnidad(i) !== null)
     .map((i) => [i.id, { p: porUnidad(i), u: enPedido(i) ? n(sueltos[i.id]) : null }]))
   const total = items.reduce((s, i) => s + (marcados[i.id] ? (porUnidad(i) ?? 0) * i.cantidad : 0), 0)
-  const todos = items.every((i) => marcados[i.id])
   const cant = (i: ItemOferta) => (enPedido(i) ? `${fmtQty(i.cantidadPedida)} ${i.unidadPedido}` : `${fmtQty(i.cantidad)} ${i.unidad ?? ''}`)
+  const nuevos = items.filter((i) => !ganadores[i.id]), conGanador = items.filter((i) => ganadores[i.id])
+  const router = useRouter()
+  const [cargando, startCarga] = useTransition()
+  const usarAnteriores = () => startCarga(async () => {
+    const r = await usarPreciosAnteriores(cotizacionId)
+    if (r?.error) toast.error(r.error)
+    else { toast.success(r?.message ?? 'Listo'); router.refresh() }
+  })
+  const grupo = (titulo: string, lista: ItemOferta[], extra: React.ReactNode) => (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-3"><span className="label mb-0">{titulo}</span>{extra}</div>
+      <div className="divide-y divide-line rounded-lg border border-field">
+        {lista.map((i) => (
+          <label key={i.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm">
+            <input type="checkbox" checked={!!marcados[i.id]} onChange={(e) => setMarcados((m) => ({ ...m, [i.id]: e.target.checked }))} aria-label={`Cotizar ${i.descripcion}`} className="size-4 shrink-0 accent-brand-600" />
+            <span className={`flex-1 ${marcados[i.id] ? '' : 'text-muted'}`}>{i.descripcion} <span className="text-xs text-muted">× {cant(i)}</span></span>
+            {ganadores[i.id] && <span className="text-xs text-muted">Ganó <b className="text-ink-900">{ganadores[i.id].proveedor}</b> · {fmtSoles(ganadores[i.id].precio)}</span>}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
-    <ActionForm action={registrarOferta} onSuccess={() => { setPrecios({}); setSueltos({}); setCanal('tienda'); setMarcados(Object.fromEntries(items.map((i) => [i.id, true]))); setVuelta((v) => v + 1) }}>
+    <ActionForm action={registrarOferta} onSuccess={() => { setPrecios({}); setSueltos({}); setCanal('tienda'); setMarcados(Object.fromEntries(items.map((i) => [i.id, !ganadores[i.id]]))); setVuelta((v) => v + 1) }}>
       <div key={vuelta} className="space-y-4">
       <input type="hidden" name="cotizacion_id" value={cotizacionId} />
       <input type="hidden" name="precios" value={JSON.stringify(payload)} />
 
-      {/* primero, qué productos se cotizan (todos marcados) */}
-      <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="label mb-0">Productos a cotizar</span>
+      {/* primero, qué productos se cotizan: los nuevos (marcados) y, aparte, los que ya tienen ganador (desmarcados) */}
+      <div className="space-y-3">
+        {nuevos.length > 0 && grupo(`Por cotizar (${nuevos.length})`, nuevos,
           <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
-            <input type="checkbox" checked={todos} onChange={(e) => setMarcados(Object.fromEntries(items.map((i) => [i.id, e.target.checked])))} className="size-4 accent-brand-600" />Todos
-          </label>
-        </div>
-        <div className="divide-y divide-line rounded-lg border border-line">
-          {items.map((i) => (
-            <label key={i.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm">
-              <input type="checkbox" checked={marcados[i.id]} onChange={(e) => setMarcados((m) => ({ ...m, [i.id]: e.target.checked }))} aria-label={`Cotizar ${i.descripcion}`} className="size-4 shrink-0 accent-brand-600" />
-              <span className={marcados[i.id] ? '' : 'text-muted'}>{i.descripcion} <span className="text-xs text-muted">× {cant(i)}</span></span>
-            </label>
-          ))}
-        </div>
+            <input type="checkbox" checked={nuevos.every((i) => marcados[i.id])} onChange={(e) => setMarcados((m) => ({ ...m, ...Object.fromEntries(nuevos.map((i) => [i.id, e.target.checked])) }))} className="size-4 accent-brand-600" />Todos</label>)}
+        {conGanador.length > 0 && grupo(`Ya cotizados antes (${conGanador.length})`, conGanador,
+          anterioresCargados
+            ? <span className="flex items-center gap-1.5 text-xs font-semibold text-leaf-600"><Check className="size-4" /> Precios anteriores cargados</span>
+            : <button type="button" disabled={cargando} onClick={usarAnteriores} className={btnClass('outline', 'sm')}>{cargando ? 'Cargando…' : 'Usar precios anteriores'}</button>)}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-        <div><span className="label">Proveedor o tienda *</span><ProveedorPicker name="proveedor" proveedores={proveedores} required onChange={(p) => setCanal(canalSugerido(p?.tipo))} /></div>
+        <div><span className="label">Proveedor o tienda <span className="req">*</span></span><ProveedorPicker name="proveedor" proveedores={proveedores} required onChange={(p) => setCanal(canalSugerido(p?.tipo))} /></div>
         <label><span className="label">Fecha</span><input type="date" name="fecha" defaultValue={hoy} className="field" /></label>
       </div>
       <fieldset className="flex flex-wrap items-center gap-2">

@@ -35,7 +35,7 @@ export function AnularConMotivo({ action, campos, titulo, detalle, children, cla
             <div className="min-w-0 flex-1">
               <h2 id={id} className="text-base font-bold">{titulo}</h2>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{detalle}</p>
-              <label className="mt-3 block"><span className="label">Motivo *</span>
+              <label className="mt-3 block"><span className="label">Motivo <span className="req">*</span></span>
                 <textarea name="motivo" required rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)}
                   placeholder="Ej.: se registró con cantidad equivocada" className="field min-h-16 py-2" /></label>
             </div>

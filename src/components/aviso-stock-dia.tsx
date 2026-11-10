@@ -1,9 +1,10 @@
-import { Send, CircleCheck } from 'lucide-react'
+import { Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAlmacenActivo } from '@/lib/session'
 import { hoyLima } from '@/lib/format'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
+import { AvisoEnviado } from '@/components/aviso-enviado'
 import { enviarStockDia } from '@/app/(app)/almacenes/actions'
 
 /**
@@ -21,11 +22,9 @@ export async function AvisoStockDia({ compacto = false }: { compacto?: boolean }
 
   if (!faltan.length) {
     if (compacto) return null
-    return (
-      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-leaf-500/30 bg-leaf-50 px-4 py-2.5 text-sm text-leaf-600">
-        <CircleCheck className="size-4" /> Stock del día enviado a Logística: {almacenes.map((a) => `${a.corto} a las ${hora(enviados.get(a.id)!)}`).join(' · ')}
-      </div>
-    )
+    // solo justo después de enviarlo, por 5 segundos
+    const ultimo = almacenes.map((a) => enviados.get(a.id)!).sort().at(-1)!
+    return <AvisoEnviado enviadoAt={ultimo} texto={`Stock del día enviado a Logística: ${almacenes.map((a) => `${a.corto} a las ${hora(enviados.get(a.id)!)}`).join(' · ')}`} />
   }
   return (
     <ActionForm action={enviarStockDia} className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">

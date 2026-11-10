@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito } from '@/lib/session'
 import { getAlmacenes, getCiudades, getProveedores, getLocalesOpc } from '@/lib/queries'
 import { hoyLima } from '@/lib/format'
-import { PageHeader, Section, Note } from '@/components/ui'
+import { PageHeader, Section } from '@/components/ui'
 import { Select } from '@/components/select'
 import { etiquetaCanal } from '@/lib/proveedor-tipo'
 import { ComboInput } from '@/components/combo-input'
@@ -100,9 +100,9 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
           <div className="mb-6"><CompraLineas inicial={inicial} /></div>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="md:col-span-2"><span className="label">Proveedor o tienda</span><ProveedorPicker name="proveedor" proveedores={proveedores} defaultValue={cot?.proveedor} /></div>
-            <label><span className="label">Almacén destino *</span><Select name="almacen" options={almacenesOpc} defaultValue={principal?.id} required /></label>
+            <label><span className="label">Almacén destino <span className="req">*</span></span><Select name="almacen" options={almacenesOpc} defaultValue={principal?.id} required /></label>
             <label><span className="label">Origen de compra</span><ComboInput name="ciudad" opciones={ciudades} placeholder="Elija o escriba: Cusco, Huancayo…" defaultValue={ciudades.find((x) => x.id === cot?.ciudad)?.nombre} /></label>
-            <label><span className="label">Fecha *</span><input type="date" name="fecha" defaultValue={hoyLima()} required className="field" /></label>
+            <label><span className="label">Fecha <span className="req">*</span></span><input type="date" name="fecha" defaultValue={hoyLima()} required className="field" /></label>
             <label><span className="label">Tipo de documento</span>
               <Select name="tipo_documento" options={COMPROBANTES} defaultValue="factura" required />
             </label>
@@ -114,9 +114,6 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
           </div>
           <label className="mt-4 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
         </Section>
-        <Note><b>Pasos:</b> 1) Logística registra la compra y la <b>aprueba</b> (desde ahí corre el plazo de entrega) →
-          2) cuando llega la mercadería, el <b>almacén</b> confirma la recepción en la ficha de la compra (fecha, hora y cantidades que llegaron) y entra al stock. El <b>flete</b> (si lo hay) se agrega en la ficha de la compra cuando ocurre, por tramos.</Note>
-        <Note>OTIF: se considera <b>a tiempo</b> si se recibe antes de la entrega comprometida (o dentro de las 24 h de aprobada si no hay compromiso) y <b>completa</b> si llegan todas las cantidades pedidas.</Note>
         <div className="flex flex-wrap justify-end gap-2">
           <SubmitButton name="accion" value="borrador" variant="outline">Guardar borrador</SubmitButton>
           <SubmitButton name="accion" value="aprobar">Aprobar compra</SubmitButton>

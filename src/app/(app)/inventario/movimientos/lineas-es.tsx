@@ -9,6 +9,8 @@ export function LineasEntradaSalida({ almacenId, entrada }: { almacenId: string;
       name="lineas"
       almacenId={almacenId}
       mostrarStock={!entrada}
+      mostrarVence={!entrada}
+      topeStock={!entrada}
       fields={entrada
         ? [
             { key: 'cantidad', label: 'Cantidad', required: true, width: '120px' },

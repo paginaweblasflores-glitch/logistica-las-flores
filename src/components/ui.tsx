@@ -150,7 +150,7 @@ const BTN = {
 export type BtnVariant = keyof typeof BTN
 export const btnClass = (variant: BtnVariant = 'primary', size: 'sm' | 'md' = 'md') =>
   cn('inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-55',
-    size === 'sm' ? 'h-8 px-3 text-xs' : 'h-9 px-4 text-sm', BTN[variant])
+    size === 'sm' ? 'h-8 px-3 text-xs' : 'h-10 px-4 text-sm', BTN[variant])
 
 export function LinkButton({ href, variant = 'primary', size = 'md', children, className, ...rest }: {
   href: string; variant?: BtnVariant; size?: 'sm' | 'md'; children: React.ReactNode; className?: string; target?: string

@@ -44,7 +44,7 @@ export default async function RequerimientoPage({ params }: {
   const loc = (await getLocales()).find((l) => l.id === r.local_id)
   const empresa = loc ? { razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : undefined
   type D = { id: string; producto_id: string | null; descripcion: string; imagen: string | null; marca: string | null; area_destino: string | null; stock_actual: number | null
-    cantidad_solicitada: number; cantidad_aprobada: number | null; precio_estimado: number | null; motivo: string | null
+    cantidad_solicitada: number; cantidad_aprobada: number | null; precio_estimado: number | null; motivo: string | null; pedida: { nombre: string } | null
     producto: { codigo: string; unidad: { codigo: string } } | null }
   const lineas = (det ?? []) as unknown as D[]
   const aprobadores = (aps ?? []) as Aprobador[]
@@ -93,13 +93,6 @@ export default async function RequerimientoPage({ params }: {
           {vigentes.map((c) => <LinkButton key={c.id} href={`/compras/${c.id}`} variant="outline">{vigentes.length > 1 ? 'Compra' : 'Ver compra'} {c.numero}</LinkButton>)}
         </>} />
 
-      {gestiona && r.estado === 'solicitado' && (
-        <Section title="Aprobación de Logística" className="no-print mb-5">
-          <Aprobacion id={id} aprobadores={aprobadores}
-            lineas={lineas.map((l) => ({ id: l.id, descripcion: l.descripcion, imagen: l.imagen, solicitada: Number(l.cantidad_solicitada), precio: l.precio_estimado }))} />
-        </Section>
-      )}
-
       <Avance estado={r.estado} cotizacion={!!cotVigente || r.estado === 'en_cotizacion'} />
       {vigentes.length > 1 && r.estado !== 'atendido' && (
         <p className="no-print -mt-2 mb-5 text-sm text-muted">Se compra a {vigentes.length} proveedores: <b>{recibidas} de {vigentes.length} compras recibidas</b>. Pasa a Atendido cuando llegan todas.</p>
@@ -119,7 +112,7 @@ export default async function RequerimientoPage({ params }: {
 
         <p className="mb-4 text-sm"><b>ÁREA SOLICITANTE:</b> {r.area_nombre ?? '—'} <span className="text-muted">· Prioridad {r.prioridad}{r.fecha_requerida ? ` · requerido para el ${fmtDate(r.fecha_requerida)}` : ''}</span></p>
 
-        <div className="mb-4 grid gap-4 text-sm md:grid-cols-2">
+        <div className={`mb-4 grid gap-4 text-sm ${r.aprobado_at ? 'md:grid-cols-2' : ''}`}>
           <div className="rounded-lg border border-line">
             <p className="border-b border-line bg-canvas px-3 py-1.5 text-xs font-bold tracking-wide uppercase">1. Datos de la solicitud</p>
             <dl className="grid grid-cols-[150px_1fr] gap-x-2 gap-y-1 px-3 py-2">
@@ -127,16 +120,19 @@ export default async function RequerimientoPage({ params }: {
               <dt className="text-muted">Fecha y hora</dt><dd>{fmtDate(r.created_at, true)}</dd>
             </dl>
           </div>
+          {/* la hoja que se lleva a la reunión aún no tiene aprobación: el bloque aparece recién al aprobar */}
+          {r.aprobado_at && (
           <div className="rounded-lg border border-line">
             <p className="border-b border-line bg-canvas px-3 py-1.5 text-xs font-bold tracking-wide uppercase">2. Datos de aprobación</p>
             <dl className="grid grid-cols-[150px_1fr] gap-x-2 gap-y-1 px-3 py-2">
-              <dt className="text-muted">Responsable que aprueba</dt><dd className="font-semibold">{r.aprobado_at ? r.aprobado_por : '—'}</dd>
+              <dt className="text-muted">Responsable que aprueba</dt><dd className="font-semibold">{r.aprobado_por}</dd>
               <dt className="text-muted">Fecha y hora</dt><dd>{fmtDate(r.aprobado_at, true)}</dd>
             </dl>
           </div>
+          )}
         </div>
 
-        <p className="mb-2 text-xs font-bold tracking-wide uppercase">3. Detalle del requerimiento</p>
+        <p className="mb-2 text-xs font-bold tracking-wide uppercase">{r.aprobado_at ? 3 : 2}. Detalle del requerimiento</p>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
             <thead><tr className="bg-canvas">
@@ -149,11 +145,11 @@ export default async function RequerimientoPage({ params }: {
                 return (
                   <tr key={l.id} className={noAprobado ? 'text-muted line-through' : ''}>
                     <td className="border border-line px-2 py-1.5">{i + 1}</td>
-                    <td className="border border-line px-2 py-1.5 font-medium">{l.descripcion}{!l.producto_id && <Badge tone="violet" className="no-print ml-1.5">Fuera de catálogo</Badge>}</td>
+                    <td className="border border-line px-2 py-1.5 font-medium">{l.descripcion}</td>
                     <td className="border border-line px-1 py-1 text-center">{l.imagen && <img src={l.imagen} alt={l.descripcion} className="mx-auto h-16 w-20 object-contain" />}</td>
                     <td className="border border-line px-2 py-1.5">{l.marca ?? ''}</td>
                     <td className="border border-line px-2 py-1.5 text-right tabular">{l.stock_actual === null ? '' : fmtQty(l.stock_actual)}</td>
-                    <td className="border border-line px-2 py-1.5 text-right tabular">{fmtQty(l.cantidad_solicitada)} {l.producto?.unidad.codigo ?? ''}</td>
+                    <td className="border border-line px-2 py-1.5 text-right tabular">{fmtQty(l.cantidad_solicitada)} {l.producto?.unidad.codigo ?? l.pedida?.nombre ?? ''}</td>
                     <td className="border border-line px-2 py-1.5 text-right font-semibold tabular">{l.cantidad_aprobada === null ? '' : fmtQty(l.cantidad_aprobada)}</td>
                     <td className="border border-line px-2 py-1.5 text-right tabular">{l.precio_estimado ? fmtSoles(l.precio_estimado) : ''}</td>
                     <td className="border border-line px-2 py-1.5">{l.motivo ?? ''}</td>
@@ -229,6 +225,14 @@ export default async function RequerimientoPage({ params }: {
             {compras?.map((c) => <Link key={c.id} href={`/compras/${c.id}`} className="mr-2 font-semibold text-brand-600">{c.numero}</Link>)}</p>
         ) : null}
       </section>
+
+      {/* después de la reunión con la hoja impresa: se marca lo aprobado (no se imprime) */}
+      {gestiona && r.estado === 'solicitado' && (
+        <Section title="Aprobación de Logística" className="no-print mt-5">
+          <Aprobacion id={id} aprobadores={aprobadores}
+            lineas={lineas.map((l) => ({ id: l.id, descripcion: l.descripcion, imagen: l.imagen, solicitada: Number(l.cantidad_solicitada), precio: l.precio_estimado }))} />
+        </Section>
+      )}
     </>
   )
 }

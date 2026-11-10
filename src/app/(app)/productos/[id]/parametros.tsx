@@ -6,20 +6,26 @@ import { SubmitButton } from '@/components/submit-button'
 import { fmtQty } from '@/lib/format'
 import { guardarParametrosAlmacen } from '../actions'
 
-type Fila = { almacen_id: string; nombre: string; stock: number | null; stock_minimo: string; stock_maximo: string; stock_objetivo: string; ubicacion: string
+type Fila = { almacen_id: string; nombre: string; stock: number | null
+  /** oficina de bebidas: ahí se usa el stock par */
+  oficina?: boolean; stock_minimo: string; stock_maximo: string; stock_objetivo: string; ubicacion: string
   fecha_vencimiento: string; dias_aviso_vencimiento: string }
 
 /**
- * Mínimo, máximo, stock par, ubicación y vencimiento por almacén. Los fija el responsable de cada almacén; Logística solo ve el stock.
- * Vencimiento (solo el almacén): la fecha y con cuántos días de anticipación avisa la campanita (por defecto 30).
- * Cada llegada trae su fecha (lote FIFO); la fecha de aquí se aplica al stock que aún no tiene fecha.
+ * Mínimo y vencimiento por almacén (y el stock par en las oficinas de bebidas). Los fija el responsable de cada almacén.
+ * La fecha de aquí se pone al stock que llegó sin fecha: sin stock no hay a qué ponérsela (la cantidad inicial lleva la suya).
+ * Máximo y ubicación ya no se piden: lo que tengan guardado se conserva.
  */
-export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = false, vencimiento = false }: {
+export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = false, vencimiento = false, unidad = '' }: {
   productoId: string; filas: Fila[]; soloLectura?: boolean
+  /** unidad del producto: el stock y el mínimo están en ella (sacos, unidades…) */
+  unidad?: string
   /** mostrar las columnas de vencimiento (panel de almacén) */
   vencimiento?: boolean
 }) {
   const [filas, setFilas] = useState(inicial)
+  const conPar = filas.some((f) => f.oficina)
+  const u = unidad.toLowerCase()
   const set = (i: number, k: keyof Fila, v: string) => setFilas((f) => f.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const datos = filas.map(({ almacen_id, stock_minimo, stock_maximo, stock_objetivo, ubicacion, fecha_vencimiento, dias_aviso_vencimiento }) => ({
     almacen_id, stock_minimo, stock_maximo, stock_objetivo, ubicacion,
@@ -31,17 +37,21 @@ export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = fa
       <input type="hidden" name="filas" value={JSON.stringify(datos)} />
       <div className="overflow-x-auto rounded-xl border border-line">
         <table className="w-full text-sm">
-          <thead><tr><th className="th">Almacén</th><th className="th text-right">Stock</th><th className="th w-28">Mínimo</th><th className="th w-28">Máximo</th><th className="th w-28">Stock par</th><th className="th">Ubicación</th>
+          <thead><tr><th className="th">Almacén</th><th className="th text-right">Stock</th><th className="th w-40">Mínimo</th>{conPar && <th className="th w-28">Stock par</th>}
             {vencimiento && <><th className="th w-40">Fecha de vencimiento</th><th className="th w-32">Avisar faltando (días)</th></>}</tr></thead>
           <tbody>{filas.map((f, i) => (
             <tr key={f.almacen_id}>
-              <td className="td">{f.nombre}</td><td className="td text-right tabular">{f.stock === null ? '—' : fmtQty(f.stock)}</td>
-              {(['stock_minimo', 'stock_maximo', 'stock_objetivo'] as const).map((k) => (
-                <td key={k} className="td py-1"><input type="number" step="any" min="0" value={f[k]} disabled={soloLectura} onChange={(e) => set(i, k, e.target.value)} className="field h-8 tabular" /></td>
-              ))}
-              <td className="td py-1"><input value={f.ubicacion} disabled={soloLectura} onChange={(e) => set(i, 'ubicacion', e.target.value)} className="field h-8" /></td>
+              <td className="td">{f.nombre}</td><td className="td text-right tabular">{f.stock === null ? '—' : <>{fmtQty(f.stock)} <span className="text-xs text-muted">{u}</span></>}</td>
+              <td className="td py-1"><div className="flex items-center gap-1.5">
+                <input type="number" step="any" min="0" value={f.stock_minimo} disabled={soloLectura} onChange={(e) => set(i, 'stock_minimo', e.target.value)} aria-label={`Mínimo en ${f.nombre}`} className="field h-8 w-24 tabular" />
+                <span className="text-xs text-muted">{u}</span></div></td>
+              {conPar && <td className="td py-1">{f.oficina
+                ? <input type="number" step="any" min="0" value={f.stock_objetivo} disabled={soloLectura} onChange={(e) => set(i, 'stock_objetivo', e.target.value)} aria-label={`Stock par en ${f.nombre}`} className="field h-8 tabular" />
+                : <span className="block px-1 text-subtle">—</span>}</td>}
               {vencimiento && <>
-                <td className="td py-1"><input type="date" value={f.fecha_vencimiento} disabled={soloLectura} onChange={(e) => set(i, 'fecha_vencimiento', e.target.value)} aria-label={`Fecha de vencimiento en ${f.nombre}`} className="field h-8 tabular" /></td>
+                <td className="td py-1">{f.stock && f.stock > 0
+                  ? <input type="date" value={f.fecha_vencimiento} disabled={soloLectura} onChange={(e) => set(i, 'fecha_vencimiento', e.target.value)} aria-label={`Fecha de vencimiento en ${f.nombre}`} className="field h-8 tabular" />
+                  : <span className="block px-1 text-subtle" title="Sin stock: la fecha va con la cantidad inicial (arriba) o en cada entrada">—</span>}</td>
                 <td className="td py-1"><input type="number" min="1" max="365" step="1" value={f.dias_aviso_vencimiento} disabled={soloLectura} onFocus={(e) => e.target.select()}
                   onChange={(e) => set(i, 'dias_aviso_vencimiento', e.target.value)} aria-label={`Días de aviso en ${f.nombre}`} className="field h-8 tabular" /></td>
               </>}

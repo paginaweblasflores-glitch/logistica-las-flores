@@ -54,7 +54,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
   // Cada almacén ve y ajusta los parámetros de los almacenes donde está el producto
   const filas = almacenes.filter((a) => !almacen || (misIds.has(String(a.local_id)) && enAlmacen.has(a.id) && sel.lista.some((x) => x.id === a.id))).map((a) => {
     const x = params_.get(a.id), s = st.find((y) => y.almacen_id === a.id)
-    return { almacen_id: a.id, nombre: a.nombre, stock: s ? Number(s.cantidad) : null, stock_minimo: x?.stock_minimo?.toString() ?? '', stock_maximo: x?.stock_maximo?.toString() ?? '', stock_objetivo: x?.stock_objetivo?.toString() ?? '', ubicacion: x?.ubicacion ?? '',
+    return { almacen_id: a.id, nombre: a.nombre, oficina: a.tipo === 'oficina', stock: s ? Number(s.cantidad) : null, stock_minimo: x?.stock_minimo?.toString() ?? '', stock_maximo: x?.stock_maximo?.toString() ?? '', stock_objetivo: x?.stock_objetivo?.toString() ?? '', ubicacion: x?.ubicacion ?? '',
       fecha_vencimiento: x?.fecha_vencimiento ?? '', dias_aviso_vencimiento: String(x?.dias_aviso_vencimiento ?? 30) }
   })
 
@@ -94,7 +94,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
         </Section>
       </div>
       <Section icon={Warehouse} title="Stock y parámetros por almacén">
-        <ParametrosAlmacen productoId={id} filas={filas} soloLectura={!almacen} vencimiento={almacen} />
+        <ParametrosAlmacen productoId={id} filas={filas} soloLectura={!almacen} vencimiento={almacen} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''} />
       </Section>
       {editable && (
         <Section icon={ShieldAlert} title={!p.activo ? 'Producto dado de baja' : compartido ? 'Quitar de mi catálogo' : 'Eliminar o dar de baja'} className="mt-5">

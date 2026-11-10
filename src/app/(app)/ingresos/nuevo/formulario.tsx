@@ -104,7 +104,7 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
             <div className="md:col-span-2"><span className="label">Proveedor</span><ProveedorPicker name="proveedor" proveedores={proveedores} placeholder="Escriba para buscar: distraroj, backus…" /></div>
             {sel.actual
               ? <div><span className="label">Almacén</span><input type="hidden" name="almacen" value={sel.actual.id} /><p className="field flex items-center bg-canvas font-semibold">{sel.actual.corto}</p></div>
-              : <label><span className="label">Almacén *</span><Select name="almacen" options={almacenes} defaultValue={principal?.id} required /></label>}
+              : <label><span className="label">Almacén <span className="req">*</span></span><Select name="almacen" options={almacenes} defaultValue={principal?.id} required /></label>}
             <label><span className="label">Fecha y hora de ingreso</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
             <label><span className="label">Comprobante</span>
               <Select name="tipo_documento" options={COMPROBANTES} defaultValue="boleta" required /></label>

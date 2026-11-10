@@ -19,11 +19,11 @@ export default async function NuevoConteoPage() {
       <ActionForm action={crearConteo} className="max-w-3xl space-y-5">
         <Section title="Datos del conteo">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label><span className="label">Almacén / área *</span><Select name="almacen" options={almacenes} placeholder="Seleccione…" required /></label>
+            <label><span className="label">Almacén / área <span className="req">*</span></span><Select name="almacen" options={almacenes} placeholder="Seleccione…" required /></label>
             <label><span className="label">Tipo de conteo</span>
               <Select name="tipo" required defaultValue="almacen" options={[{ id: 'almacen', nombre: 'Almacén (quincenal)' }, { id: 'carnes', nombre: 'Carnes (semanal, sábados)' }, { id: 'bebidas', nombre: 'Bebidas de oficina (mensual)' }, { id: 'utensilios', nombre: 'Utensilios / patrimonial' }]} />
             </label>
-            <label><span className="label">Fecha *</span><input type="date" name="fecha" defaultValue={hoyLima()} required className="field" /></label>
+            <label><span className="label">Fecha <span className="req">*</span></span><input type="date" name="fecha" defaultValue={hoyLima()} required className="field" /></label>
             <label><span className="label">Hora</span><input type="time" name="hora" className="field" /></label>
             <label><span className="label">Responsable del conteo</span><Select name="responsable_conteo" options={personal} placeholder="—" agregar="personal" /></label>
             <label><span className="label">Responsable del almacén (a quien se descuenta)</span><Select name="responsable_almacen" options={personal} placeholder="—" agregar="personal" /></label>

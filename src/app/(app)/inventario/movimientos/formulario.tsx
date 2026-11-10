@@ -52,11 +52,11 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <label><span className="label">Fecha y hora</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
             {conArea && (
-              <div><span className="label">Área destino *</span>
+              <div><span className="label">Área destino <span className="req">*</span></span>
                 <ComboInput name="area" opciones={areas ?? []} placeholder="Elija o escriba el área" /></div>
             )}
             {tipo === 'salida_consumo' && (
-              <label><span className="label">Entregado a *</span><input name="recibe" required className="field" placeholder="Nombre de quien recibe" /></label>
+              <label><span className="label">Entregado a <span className="req">*</span></span><input name="recibe" required className="field" placeholder="Nombre de quien recibe" /></label>
             )}
             {tipo === 'devolucion_proveedor' && (
               <label><span className="label">Documento</span><input name="documento" className="field" placeholder="Guía, nota de crédito…" /></label>

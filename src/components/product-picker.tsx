@@ -75,7 +75,7 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
 
   if (selected && !onSelect) {
     return (
-      <div className={cn('flex h-9 items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 text-sm', className)}>
+      <div className={cn('flex h-10 items-center justify-between gap-2 rounded-lg border border-field bg-white px-3 text-sm', className)}>
         <input type="hidden" name={name} value={selected.id} />
         <span className="truncate"><b>{selected.nombre}</b> <span className="text-muted">· {selected.codigo}</span></span>
         <button type="button" onClick={() => setSelected(null)} className="text-muted hover:text-brand-600" aria-label="Quitar">

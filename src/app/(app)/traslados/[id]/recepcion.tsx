@@ -22,7 +22,7 @@ export function RecepcionTraspaso({ id, lineas }: { id: string; lineas: Linea[] 
     return (
       <ActionForm action={cancelarTraspaso} className="space-y-3">
         <input type="hidden" name="id" value={id} />
-        <label className="block"><span className="label">Motivo del rechazo *</span>
+        <label className="block"><span className="label">Motivo del rechazo <span className="req">*</span></span>
           <input name="motivo" required className="field" placeholder="Llegó dañado, no corresponde, no se pidió…" /></label>
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" className={btnClass('outline')} onClick={() => setRechazar(false)}>Volver</button>
@@ -84,7 +84,7 @@ export function CancelarTraspaso({ id }: { id: string }) {
   return (
     <ActionForm action={cancelarTraspaso} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
-      <label className="min-w-64"><span className="label">Motivo de la cancelación *</span><input name="motivo" required className="field h-8" /></label>
+      <label className="min-w-64"><span className="label">Motivo de la cancelación <span className="req">*</span></span><input name="motivo" required className="field h-8" /></label>
       <SubmitButton size="sm" variant="danger" confirm="¿Cancelar el envío? La mercadería vuelve a su stock.">Cancelar envío</SubmitButton>
       <button type="button" className={btnClass('ghost', 'sm')} onClick={() => setAbierto(false)}>Volver</button>
     </ActionForm>

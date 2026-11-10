@@ -120,7 +120,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
             : 'Productos de este almacén con su propio código. Haga clic en un producto para ver o cambiar sus datos.'
           : 'Catálogo único de productos. Cada producto se marca en el negocio donde se usa; el stock de cada negocio es independiente.'}
         actions={<>
-          <ExportButton filename="productos" table="producto" order="nombre" columns={{ codigo: 'Código', nombre: 'Nombre', marca: 'Marca', presentacion: 'Presentación', costo_referencia: 'Último precio de compra', activo: 'Activo' }} />
+          <ExportButton filename="productos" table="producto" order="nombre" columns={{ codigo: 'Código', nombre: 'Nombre', marca: 'Marca', costo_referencia: 'Último precio de compra', activo: 'Activo' }} />
           {/* Almacén 01 y 02 del mismo responsable: separar qué producto es de cada uno (una sola vez) */}
           {almacen && sel.lista.length > 1 && <LinkButton href="/productos/separar" variant="outline">Separar Almacén 01 / 02</LinkButton>}
           {almacen && !consulta && <LinkButton href="/productos/nuevo"><Plus className="size-4" /> Nuevo producto</LinkButton>}

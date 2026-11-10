@@ -9,6 +9,7 @@ import { fmtSoles } from '@/lib/format'
 import { recibirCompra } from '../actions'
 import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
+import { TotalComprobante } from '@/components/total-comprobante'
 
 type LineaRec = { id: string; producto: string; unidad: string; pedido: number; precio: number
   /** producto con «Controlar vencimiento (FIFO)»: llega con su fecha de vencimiento */
@@ -30,6 +31,9 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
   const fac = (l: LineaRec) => factorUnidad(u, { unidad: l.unidad }, rec[l.id].uni, rec[l.id].equivale) ?? 1
   const hayVence = lineas.some((l) => l.conVencimiento)
   const [totalBoleta, setTotalBoleta] = useState('')
+  // el comprobante ya se registró en la compra: no se vuelve a pedir (solo «cambiar» si la boleta trae otro)
+  const [cambiarDoc, setCambiarDoc] = useState(!doc?.numero)
+  const nombreDoc = COMPROBANTES.find((x) => x.id === (doc?.tipo ?? 'boleta'))?.nombre ?? 'Comprobante'
   const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
   const suma = lineas.reduce((s, l) => s + (num(rec[l.id].cant) || 0) * (num(rec[l.id].precio) || 0), 0)
   const incompleta = lineas.some((l) => num(rec[l.id].cant) * fac(l) < l.pedido)
@@ -45,11 +49,18 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
       <input type="hidden" name="lineas" value={JSON.stringify(payload)} />
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <label><span className="label">Comprobante</span>
-          <Select name="tipo_documento" options={COMPROBANTES} defaultValue={doc?.tipo ?? 'boleta'} required /></label>
-        <label><span className="label">N° del comprobante</span><input name="numero_documento" defaultValue={doc?.numero ?? ''} className="field" placeholder="B001-000123" /></label>
-        <label><span className="label">Total del comprobante (S/)</span>
-          <input name="total_documento" inputMode="decimal" value={totalBoleta} onChange={(e) => setTotalBoleta(e.target.value)} className="field tabular" placeholder={suma.toFixed(2)} /></label>
+        {cambiarDoc ? <>
+          <label><span className="label">Comprobante</span>
+            <Select name="tipo_documento" options={COMPROBANTES} defaultValue={doc?.tipo ?? 'boleta'} required /></label>
+          <label><span className="label">N° del comprobante</span><input name="numero_documento" defaultValue={doc?.numero ?? ''} className="field" placeholder="B001-000123" /></label>
+        </> : (
+          <div className="sm:col-span-2"><span className="label">Comprobante</span>
+            <input type="hidden" name="tipo_documento" value={doc?.tipo ?? 'boleta'} /><input type="hidden" name="numero_documento" value={doc?.numero ?? ''} />
+            <p className="flex h-10 items-center gap-2 text-sm"><b>{nombreDoc} {doc?.numero}</b>
+              <button type="button" onClick={() => setCambiarDoc(true)} className="text-xs font-semibold text-brand-600 hover:underline">cambiar</button></p>
+          </div>
+        )}
+        <TotalComprobante suma={suma} onEscrito={setTotalBoleta} />
         <label><span className="label">Fecha y hora de llegada</span><input type="datetime-local" name="fecha_entrega" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_entrega_inicial" value={ahora} /></label>
       </div>
 

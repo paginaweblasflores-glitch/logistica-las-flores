@@ -22,7 +22,7 @@ export function LineasRequerimientoAlmacen({ almacenId }: { almacenId: string })
       ]}
       // de un clic: los que bajaron de su mínimo, con la cantidad del mínimo (se ajusta antes de enviar)
       herramientas={(agregar) => (
-        <button type="button" disabled={cargando} className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-sm font-semibold hover:border-brand-200 disabled:opacity-60"
+        <button type="button" disabled={cargando} className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-sm font-semibold hover:border-brand-200 disabled:opacity-60"
           onClick={async () => {
             setCargando(true)
             const { data, error } = await createClient().rpc('fn_bajo_minimo', { p_almacen: almacenId })

@@ -2,27 +2,27 @@ import Link from 'next/link'
 import { Layers, CalendarClock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getAlmacenActivo, getPanel } from '@/lib/session'
-import { fmtDate, fmtPct, fmtQty, fmtSoles } from '@/lib/format'
+import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { sp } from '@/lib/utils'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, EmptyState, EstadoBadge, Stat, Note, Badge } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, EmptyState, EstadoBadge, Stat, Badge } from '@/components/ui'
 import { Select } from '@/components/select'
 import { PagedTable } from '@/components/pager'
 
 export async function generateMetadata() {
-  return { title: (await getPanel()) === 'almacen' ? 'Vencimientos' : 'FIFO' }
+  return { title: 'Vencimientos' }
 }
 
 /**
  * Almacén → «Vencimientos»: qué vence y cuándo, con el aviso que eligió para cada producto.
  *   El FIFO lo hace el sistema solo (cada salida descuenta lo más antiguo): el almacén no ve lotes.
- * Logística → «FIFO»: reporte del cumplimiento FIFO (meta 100%) y los lotes en su orden de salida.
+ * Logística → «Vencimientos»: lo que vence pronto o ya venció (con su valor) y los lotes en su orden de salida.
  */
 export default async function LotesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   const [{ local }, sel, panel, supabase] = await Promise.all([getAmbito(), getAlmacenActivo(), getPanel(), createClient()])
   return panel === 'almacen'
     ? <Vencimientos supabase={supabase} local={local?.id ?? null} almacen={sel.id} estado={sp(params, 'estado')} />
-    : <ReporteFifo supabase={supabase} local={local?.id ?? null} />
+    : <ReporteLotes supabase={supabase} local={local?.id ?? null} />
 }
 
 type Cliente = Awaited<ReturnType<typeof createClient>>
@@ -72,32 +72,34 @@ async function Vencimientos({ supabase, local, almacen, estado }: { supabase: Cl
   )
 }
 
-async function ReporteFifo({ supabase, local }: { supabase: Cliente; local: string | null }) {
-  let q = supabase.from('v_lote_fifo').select('id, producto, codigo_almacen, almacen, fecha_ingreso, cantidad_inicial, cantidad_disponible, costo_unitario, orden_salida')
+async function ReporteLotes({ supabase, local }: { supabase: Cliente; local: string | null }) {
+  let q = supabase.from('v_lote_fifo').select('id, producto, codigo_almacen, almacen, fecha_ingreso, fecha_vencimiento, dias_para_vencer, estado, cantidad_inicial, cantidad_disponible, costo_unitario, orden_salida')
   if (local) q = q.eq('local_id', local)
-  const [{ data }, { data: fifoData }] = await Promise.all([
-    q.order('producto').order('orden_salida').limit(1000),
-    supabase.rpc('fn_fifo_resumen', { p_local: local }),
-  ])
-  const fifo = fifoData as { cumplimiento: number | null; salidas: number } | null
-  type L = { id: string; producto: string; codigo_almacen: number | null; almacen: string; fecha_ingreso: string; cantidad_inicial: number; cantidad_disponible: number; costo_unitario: number; orden_salida: number }
+  const { data } = await q.order('producto').order('orden_salida').limit(1000)
+  type L = { id: string; producto: string; codigo_almacen: number | null; almacen: string; fecha_ingreso: string; fecha_vencimiento: string | null; dias_para_vencer: number | null
+    estado: string; cantidad_inicial: number; cantidad_disponible: number; costo_unitario: number; orden_salida: number }
   const rows = (data ?? []) as L[]
+  const valor = (r: L) => Number(r.cantidad_disponible) * Number(r.costo_unitario)
+  // por vencer = dentro del aviso de cada producto (30 días si no se cambió); vencidos = ya vencieron y siguen en el almacén
+  const porVencer = rows.filter((r) => r.estado === 'por_vencer'), vencidos = rows.filter((r) => r.estado === 'vencido')
+  const suma = (xs: L[]) => xs.reduce((s, r) => s + valor(r), 0)
 
   return (
     <>
-      <PageHeader title="FIFO" description="Reporte: cuánto se cumple que salga primero lo que vence primero (meta 100%; lo que no vence, por orden de llegada) y los lotes de cada almacén en su orden de salida. Lo calcula el sistema solo." />
-      <div className="mb-5 grid grid-cols-2 gap-4 lg:max-w-xl">
-        <Stat label="Cumplimiento FIFO" value={fmtPct(fifo?.cumplimiento)} meta={{ valor: fifo?.cumplimiento ?? null, meta: 1 }} hint={`${fifo?.salidas ?? 0} salidas`} />
-        <Stat label="Lotes activos" value={rows.length} />
+      <PageHeader title="Vencimientos" />
+      <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <Stat label="Por vencer (30 días)" value={porVencer.length} tone={porVencer.length ? 'warn' : 'default'} hint={`${fmtSoles(suma(porVencer))} en riesgo`} />
+        <Stat label="Vencidos con stock" value={vencidos.length} tone={vencidos.length ? 'bad' : 'good'} hint={`${fmtSoles(suma(vencidos))} en el almacén`} />
+        <Stat label="Lotes activos" value={rows.length} hint={`${fmtSoles(suma(rows))} en total`} />
       </div>
-      <div className="mb-4"><Note>Las salidas descuentan automáticamente el lote que vence primero. Si alguien elige manualmente otro lote, la salida queda marcada “fuera de FIFO” y baja el indicador.</Note></div>
       <Section icon={Layers} title="Lotes en almacén" bodyClassName="p-0">
         {rows.length ? (
-          <PagedTable head={<tr><Th right>Cód.</Th><Th>Producto</Th><Th>Almacén</Th><Th right>Orden de salida</Th><Th>Ingreso</Th><Th right>Saldo</Th><Th right>Valor</Th></tr>}>{rows.map((r) => (
+          <PagedTable head={<tr><Th right>Cód.</Th><Th>Producto</Th><Th>Almacén</Th><Th right>Orden de salida</Th><Th>Ingreso</Th><Th>Vence</Th><Th right>Saldo</Th><Th right>Valor</Th></tr>}>{rows.map((r) => (
               <tr key={r.id}><Td right className="font-mono text-xs font-semibold">{r.codigo_almacen ?? '—'}</Td><Td className="font-medium">{r.producto}</Td><Td className="text-xs">{r.almacen}</Td>
                 <Td right>{r.orden_salida === 1 ? <Badge tone="dark">Sale primero</Badge> : `${r.orden_salida}º`}</Td>
                 <Td className="tabular">{fmtDate(r.fecha_ingreso)}</Td>
-                <Td right>{fmtQty(r.cantidad_disponible)} / {fmtQty(r.cantidad_inicial)}</Td><Td right>{fmtSoles(r.cantidad_disponible * r.costo_unitario)}</Td></tr>
+                <Td className="tabular">{r.fecha_vencimiento ? <>{fmtDate(r.fecha_vencimiento)}{r.estado !== 'vigente' && <span className="ml-1.5"><EstadoBadge estado={r.estado} /></span>}</> : <span className="text-subtle">—</span>}</Td>
+                <Td right>{fmtQty(r.cantidad_disponible)} / {fmtQty(r.cantidad_inicial)}</Td><Td right>{fmtSoles(valor(r))}</Td></tr>
             ))}</PagedTable>
         ) : <EmptyState title="No hay lotes activos" />}
       </Section>
