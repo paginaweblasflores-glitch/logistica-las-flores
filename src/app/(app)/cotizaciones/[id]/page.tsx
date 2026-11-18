@@ -123,7 +123,7 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
                     <Td right className="tabular">{enPedido ? <>{fmtSoles(o.sueltos?.[i.id] ?? p)} <span className="text-xs text-muted">/{i.unidad}</span></> : '—'}</Td>
                     <Td right className="font-semibold tabular">{fmtSoles(p * Number(i.cantidad))}</Td>
                     <Td className="no-print">{compra
-                      ? <Link href={`/compras/${compra.id}`} className="font-semibold text-brand-600 hover:underline">{compra.numero}</Link>
+                      ? <Link href={`/compras/${compra.id}`} className="enlace">{compra.numero}</Link>
                       : delAlmacen ? <span className="text-xs text-muted">Por marcar como comprado</span>
                       : <LinkButton href={`/compras/nueva?cotizacion=${id}&oferta=${o.id}`} size="sm">Generar compra</LinkButton>}</Td>
                   </tr>

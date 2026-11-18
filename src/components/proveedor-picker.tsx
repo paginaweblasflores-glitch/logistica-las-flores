@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Building2, Check, ChevronDown, Globe, Plus, Store, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { btnClass } from '@/components/ui'
 import { TIPOS_PROVEEDOR, etiquetaTipo } from '@/lib/proveedor-tipo'
 import { crearProveedorRapido, type ProveedorRapido } from '@/app/(app)/proveedores/actions'
+import { useCerrarFuera } from '@/lib/use-cerrar-fuera'
 
 export type ProveedorOpc = { id: string; nombre: string; tipo?: string | null }
 
@@ -33,12 +34,7 @@ export function ProveedorPicker({ name, proveedores, defaultValue, required, onC
   const elegido = lista.find((p) => p.id === sel)
   function setSel(id: string, l: ProveedorOpc[] = lista) { setSelId(id); onChange?.(l.find((p) => p.id === id)) }
 
-  useEffect(() => {
-    if (!abierto) return
-    const cerrar = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
-    document.addEventListener('mousedown', cerrar)
-    return () => document.removeEventListener('mousedown', cerrar)
-  }, [abierto])
+  useCerrarFuera(caja, abierto, () => setAbierto(false))
 
   const filtrados = useMemo(() => {
     const t = norm(texto.trim())

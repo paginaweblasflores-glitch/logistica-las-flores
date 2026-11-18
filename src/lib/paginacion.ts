@@ -10,6 +10,7 @@ export function paginar(params: Record<string, string | string[] | undefined>, p
   const v = (k: string) => { const x = params[prefijo + k]; return Array.isArray(x) ? x[0] : x }
   const sizeNum = Number(v('size'))
   const size = (TAMANOS_PAGINA as readonly number[]).includes(sizeNum) ? sizeNum : TAMANO_DEFECTO
-  const page = Math.max(1, Math.floor(Number(v('page')) || 1))
+  const p = Math.floor(Number(v('page')))
+  const page = Number.isFinite(p) && p >= 1 ? p : 1   // «Infinity» o texto → primera página
   return { page, size, from: (page - 1) * size, to: page * size - 1 }
 }

@@ -6,7 +6,7 @@ import { fmtDate, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { NOMBRE_TIPO, TIPOS_DE, TIPOS_FILTRO, type Sentido } from '@/lib/movimientos'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, Badge } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, FiltroFechas, Pagination, EmptyState, LinkButton, Badge } from '@/components/ui'
 import { Select } from '@/components/select'
 import { AnularConMotivo } from '@/components/anular-con-motivo'
 import { ExportButton } from '@/components/export-button'
@@ -52,8 +52,7 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
         </>} />
       <FilterBar>
         <FilterField label="Tipo"><Select name="tipo" options={TIPOS_FILTRO[sentido].map((c) => ({ id: c, nombre: NOMBRE_TIPO[c] }))} defaultValue={tipo} placeholder="Todos" /></FilterField>
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
       <Section icon={entrada ? ArrowDownToLine : ArrowUpFromLine} title={`Historial de ${titulo.toLowerCase()}`} bodyClassName="p-0" stats={[{ label: 'Registros', value: count ?? 0 }]}>
         {filas.length ? (
@@ -67,17 +66,17 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
               <tbody>
                 {filas.map((m) => {
                   const valor = m.movimiento_detalle.reduce((s, d) => s + Number(d.cantidad) * Number(d.costo_unitario ?? 0), 0)
-                  const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : m.referencia_tipo === 'conteo' ? `/conteos/${m.referencia_id}` : null
+                  const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : null
                   return (
                     <tr key={m.id} className={m.anulado ? 'opacity-50' : 'hover:bg-canvas/60'}>
-                      <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`${ruta}/${m.id}`} className="text-brand-600 hover:underline">{m.nro ?? '—'}</Link></Td>
+                      <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`${ruta}/${m.id}`} className="enlace">{m.nro ?? '—'}</Link></Td>
                       <Td className="whitespace-nowrap tabular">{fmtDate(m.fecha, true)}</Td>
                       <Td><Badge tone={entrada ? 'green' : 'red'}>{m.motivo?.codigo.startsWith('TIPO-') ? m.motivo.nombre : NOMBRE_TIPO[m.tipo] ?? m.tipo}</Badge>{m.anulado && <Badge tone="dark" className="ml-1">Anulado</Badge>}
                         {m.anulado && m.motivo_anulacion && <span className="block text-xs text-brand-700">Anulado: {m.motivo_anulacion}</span>}</Td>
                       {varios && <Td className="text-sm">{m.almacen.nombre}</Td>}
                       {entrada
-                        ? <Td className="text-sm">{origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : m.area?.nombre ?? m.documento?.toUpperCase() ?? m.observacion ?? '—'}</Td>
-                        : <><Td className="text-sm">{m.area?.nombre ?? (origen ? <Link href={origen} className="font-semibold text-brand-600">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : '—')}</Td><Td className="text-sm">{m.recibe ?? '—'}</Td></>}
+                        ? <Td className="text-sm">{origen ? <Link href={origen} className="enlace">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : m.area?.nombre ?? m.documento?.toUpperCase() ?? m.observacion ?? '—'}</Td>
+                        : <><Td className="text-sm">{m.area?.nombre ?? (origen ? <Link href={origen} className="enlace">{m.documento?.toUpperCase() ?? 'Ver origen'}</Link> : '—')}</Td><Td className="text-sm">{m.recibe ?? '—'}</Td></>}
                       <Td right>{m.movimiento_detalle.length}</Td>
                       <Td right className="font-semibold">{fmtSoles(valor)}</Td>
                       <Td>

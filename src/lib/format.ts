@@ -30,6 +30,16 @@ export const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ag
 export function hoyLima() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date())
 }
+/** Fecha y hora actuales en Lima, como las pide un campo «datetime-local» (2026-11-18T09:30). */
+export function ahoraLima() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
+}
+/** El instante de hace `dias` días (ISO), para filtros como «últimos 90 días». */
+export function haceDias(dias: number) {
+  return new Date(Date.now() - dias * 86_400_000).toISOString()
+}
 export function inicioMes(fecha = hoyLima()) {
   return `${fecha.slice(0, 7)}-01`
 }

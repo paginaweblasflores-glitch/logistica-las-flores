@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { run, check, must, type ActionResult } from '@/lib/actions'
+import { run, enUnaOperacion, type ActionResult } from '@/lib/actions'
 import { parseLines, num } from '@/lib/lines'
 
 export async function crearCotizacion(_: ActionResult, fd: FormData): Promise<ActionResult> {
@@ -12,14 +12,17 @@ export async function crearCotizacion(_: ActionResult, fd: FormData): Promise<Ac
     if (!String(fd.get('titulo') ?? '').trim()) return { error: 'Escriba un título para la cotización.' }
     if (!items.length) return { error: 'Agregue al menos un ítem con cantidad.' }
     const supabase = await createClient()
-    const cot = must(await supabase.from('cotizacion').insert({
-      titulo: String(fd.get('titulo')).trim(), local_id: fd.get('local') || null, fecha: String(fd.get('fecha')), observacion: fd.get('observacion') || null,
-    }).select('id').single())
-    check(await supabase.from('cotizacion_item').insert(items.map((l) => ({
-      cotizacion_id: cot.id, producto_id: l.producto_id, descripcion: l.descripcion, cantidad: num(l.cantidad), unidad: l.unidad,
-    }))))
+    // cotización e ítems juntos (sin cotizaciones vacías si falla un ítem)
+    const ids = await enUnaOperacion(supabase, [
+      { insertar: 'cotizacion', como: 'cot', valores: {
+        titulo: String(fd.get('titulo')).trim(), local_id: fd.get('local') || null, fecha: String(fd.get('fecha')), observacion: fd.get('observacion') || null,
+      } },
+      { insertar: 'cotizacion_item', valores: items.map((l) => ({
+        cotizacion_id: '@id:cot', producto_id: l.producto_id || null, descripcion: l.descripcion, cantidad: num(l.cantidad), unidad: l.unidad,
+      })) },
+    ])
     revalidatePath('/cotizaciones')
-    redirect(`/cotizaciones/${cot.id}`)
+    redirect(`/cotizaciones/${ids.cot}`)
   })
 }
 
@@ -38,8 +41,11 @@ export async function registrarOferta(_: ActionResult, fd: FormData): Promise<Ac
     const { data: prev } = await supabase.from('cotizacion_oferta').select('ronda').eq('cotizacion_id', cotizacion).eq('proveedor_id', proveedor)
       .or(canal === 'tienda' ? 'canal.eq.tienda,canal.is.null' : 'canal.eq.en_linea').order('ronda', { ascending: false }).limit(1)
     const ronda = (prev?.[0]?.ronda ?? 0) + 1
-    const oferta = must(await supabase.from('cotizacion_oferta').insert({ cotizacion_id: cotizacion, proveedor_id: proveedor, ronda, canal, fecha: String(fd.get('fecha')) }).select('id').single())
-    check(await supabase.from('cotizacion_precio').insert(validos.map(([item, v]) => ({ oferta_id: oferta.id, item_id: item, precio_unitario: Number(v.p), precio_unidad: v.u === null ? null : Number(v.u) }))))
+    // oferta y precios juntos (sin ofertas sin precios si falla uno)
+    await enUnaOperacion(supabase, [
+      { insertar: 'cotizacion_oferta', como: 'oferta', valores: { cotizacion_id: cotizacion, proveedor_id: proveedor, ronda, canal, fecha: String(fd.get('fecha')) } },
+      { insertar: 'cotizacion_precio', valores: validos.map(([item, v]) => ({ oferta_id: '@id:oferta', item_id: item, precio_unitario: Number(v.p), precio_unidad: v.u === null ? null : Number(v.u) })) },
+    ])
     revalidatePath(`/cotizaciones/${cotizacion}`)
     return { message: `Oferta registrada (ronda ${ronda}).` }
   })
@@ -64,17 +70,18 @@ export async function adjudicar(_: ActionResult, fd: FormData): Promise<ActionRe
       const o = ofs.find((x) => x.id === oferta)
       if (!o || !o.cotizacion_precio.some((p) => p.item_id === item)) return { error: 'Hay un producto marcado con una oferta que no tiene su precio. Revise el cuadro.' }
     }
-    for (const [item, oferta] of elegidos) {
-      check(await supabase.from('cotizacion_item').update({ oferta_ganadora_id: oferta }).eq('id', item).eq('cotizacion_id', id))
-    }
     // si todo lo ganó una sola oferta se registra como antes (proveedor y oferta aprobados)
     const unicas = [...new Set(elegidos.map(([, o]) => o))]
     const proveedores = [...new Set(unicas.map((o) => ofs.find((x) => x.id === o)!.proveedor_id))]
-    check(await supabase.from('cotizacion').update({
-      estado: 'adjudicada',
-      proveedor_aprobado_id: proveedores.length === 1 ? proveedores[0] : null,
-      oferta_aprobada_id: unicas.length === 1 ? unicas[0] : null,
-    }).eq('id', id))
+    // estado primero (solo si seguía abierta: otra pestaña pudo adjudicarla) y luego cada ganador, todo en una transacción
+    await enUnaOperacion(supabase, [
+      { actualizar: 'cotizacion', valores: {
+        estado: 'adjudicada',
+        proveedor_aprobado_id: proveedores.length === 1 ? proveedores[0] : null,
+        oferta_aprobada_id: unicas.length === 1 ? unicas[0] : null,
+      }, donde: { id, estado: ['abierta'] }, exigir: 'Esta cotización ya fue adjudicada o anulada: recargue la página.' },
+      ...elegidos.map(([item, oferta]) => ({ actualizar: 'cotizacion_item', valores: { oferta_ganadora_id: oferta }, donde: { id: item, cotizacion_id: id } })),
+    ])
     revalidatePath('/cotizaciones', 'layout')
     return { message: unicas.length === 1 ? 'Cotización adjudicada. Ya puede generar la compra.' : `Cotización adjudicada a ${unicas.length} proveedores: genere una compra para cada uno.` }
   })

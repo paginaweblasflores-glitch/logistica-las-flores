@@ -8,6 +8,9 @@ import { Select } from '@/components/select'
 export function LoginForm({ next, usuarios }: { next: string; usuarios: string[] }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, undefined)
   const [show, setShow] = useState(false)
+  // controlados: si la contraseña está mal, el usuario elegido y lo escrito se quedan (React limpia el formulario tras enviarlo)
+  const [usuario, setUsuario] = useState('')
+  const [password, setPassword] = useState('')
 
   return (
     <form action={action} className="space-y-4">
@@ -16,17 +19,18 @@ export function LoginForm({ next, usuarios }: { next: string; usuarios: string[]
         <label htmlFor="usuario" className="label">Usuario <span className="text-brand-600">*</span></label>
         {usuarios.length ? (
           <div className="relative">
-            <Select id="usuario" name="usuario" required options={usuarios.map((u) => ({ id: u, nombre: u }))} placeholder="Selecciona tu usuario…" className="h-11" />
+            <Select id="usuario" name="usuario" required value={usuario} onChange={setUsuario} options={usuarios.map((u) => ({ id: u, nombre: u }))} placeholder="Selecciona tu usuario…" className="h-11" />
           </div>
         ) : (
           // Si la lista no está disponible, se permite escribir el usuario
-          <input id="usuario" name="usuario" autoComplete="username" required autoFocus placeholder="Logística Las Flores" className="field h-11" />
+          <input id="usuario" name="usuario" value={usuario} onChange={(e) => setUsuario(e.target.value)} autoComplete="username" required autoFocus placeholder="Logística Las Flores" className="field h-11" />
         )}
       </div>
       <div>
         <label htmlFor="password" className="label">Contraseña <span className="text-brand-600">*</span></label>
         <div className="relative">
           <input id="password" name="password" type={show ? 'text' : 'password'} autoComplete="current-password"
+                 value={password} onChange={(e) => setPassword(e.target.value)}
                  required placeholder="Ingresa tu contraseña" className="field h-11 pr-11" />
           <button type="button" onClick={() => setShow((s) => !s)}
                   className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-ink-900"

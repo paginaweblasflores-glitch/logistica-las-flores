@@ -94,8 +94,8 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
               <dt className="text-muted">Documento</dt><dd>{c.tipo_documento ? DOC[c.tipo_documento] ?? c.tipo_documento : '—'} {c.numero_documento ?? ''}{c.total_documento != null && <span className="text-muted"> · total {fmtSoles(c.total_documento)}</span>}</dd>
               <dt className="text-muted">Forma de pago</dt><dd>{c.forma_pago ?? '—'}</dd>
               <dt className="text-muted">Origen</dt><dd>{c.ciudad ?? '—'}</dd>
-              {requerimiento && <><dt className="text-muted">Requerimiento</dt><dd><Link href={`/requerimientos/${requerimiento.id}`} className="font-semibold text-brand-600 print:text-ink-900">{requerimiento.numero}</Link></dd></>}
-              {cotizacion && <><dt className="text-muted">Cotización</dt><dd><Link href={`/cotizaciones/${cotizacion.id}`} className="font-semibold text-brand-600 print:text-ink-900">{cotizacion.numero}</Link></dd></>}
+              {requerimiento && <><dt className="text-muted">Requerimiento</dt><dd><Link href={`/requerimientos/${requerimiento.id}`} className="print:text-ink-900 enlace">{requerimiento.numero}</Link></dd></>}
+              {cotizacion && <><dt className="text-muted">Cotización</dt><dd><Link href={`/cotizaciones/${cotizacion.id}`} className="print:text-ink-900 enlace">{cotizacion.numero}</Link></dd></>}
             </dl>
           </div>
           <div className="rounded-lg border border-line">

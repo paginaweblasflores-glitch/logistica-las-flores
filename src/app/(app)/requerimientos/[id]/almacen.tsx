@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { PackageCheck } from 'lucide-react'
-import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
+import { fmtDate, fmtQty, fmtSoles, ahoraLima } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
@@ -33,7 +33,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
   const vigentes = compras.filter((c) => c.estado !== 'anulada')
   const cotVigente = cots.find((c) => c.estado !== 'anulada')
   const enCamino = vigentes.filter((c) => c.estado === 'aprobada')
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
+  const ahora = ahoraLima()
   // lo que llegó de cada producto (de las compras ya registradas por el almacén) y su precio de boleta
   const llego = (pid: string | null) => vigentes.filter((c) => c.estado === 'recibida')
     .flatMap((c) => c.compra_detalle.filter((d) => d.producto_id === pid)).reduce((s, d) => s + Number(d.cantidad_recibida ?? 0), 0)
@@ -71,7 +71,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
         <div className="mb-5"><Note>
           <b>En camino</b> ({enCamino.map((c) => `${c.numero} · ${c.proveedor?.razon_social ?? 'sin proveedor'}`).join(' · ')}).{' '}
           {esAlmacen
-            ? <>Cuando llegue, regístrelo en <Link href={`/entradas/nueva?tipo=compra&compra=${enCamino[0].id}`} className="font-semibold text-brand-600">Entradas → Compra con boleta</Link> con los datos de la boleta.</>
+            ? <>Cuando llegue, regístrelo en <Link href={`/entradas/nueva?tipo=compra&compra=${enCamino[0].id}`} className="enlace">Entradas → Compra con boleta</Link> con los datos de la boleta.</>
             : 'El almacén registrará la llegada con la boleta.'}
         </Note></div>
       )}

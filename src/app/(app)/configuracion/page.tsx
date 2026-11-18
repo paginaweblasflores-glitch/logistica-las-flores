@@ -2,7 +2,7 @@ import { Settings, Lock, Users, Warehouse } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getLocalesOpc } from '@/lib/queries'
 import { fmtDate, hoyLima, MESES } from '@/lib/format'
-import { PageHeader, Section, Table, Th, Td, Badge, Note } from '@/components/ui'
+import { PageHeader, Section, Th, Td, Badge, Note } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
@@ -11,7 +11,7 @@ import { PagedTable } from '@/components/pager'
 
 export const metadata = { title: 'Configuración' }
 
-const PCT = new Set(['meta_otif', 'meta_diferencia_inventario', 'meta_fifo', 'meta_ahorro', 'pct_descuento_rotura', 'umbral_alerta_precio', 'igv'])
+const PCT = new Set(['meta_otif', 'meta_diferencia_inventario', 'meta_fifo', 'meta_ahorro', 'umbral_alerta_precio', 'igv'])
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
@@ -45,7 +45,7 @@ export default async function ConfiguracionPage() {
                 </label>
               )
             })}
-            <div className="flex justify-end"><SubmitButton>Guardar parámetros</SubmitButton></div>
+            <div className="flex justify-end"><SubmitButton soloConCambios>Guardar parámetros</SubmitButton></div>
           </ActionForm>
         </Section>
 
@@ -54,14 +54,14 @@ export default async function ConfiguracionPage() {
             <ActionForm action={guardarAprobadores} className="space-y-3">
               <p className="text-xs text-muted">Se sugiere al primero cuyo tope cubre el monto estimado del requerimiento. Deje el tope vacío en el último (montos mayores). En cada requerimiento se puede elegir otro.</p>
               {(aprobadores ?? []).map((a) => (
-                <div key={a.id} className="grid gap-2 border-b border-line/70 pb-3 md:grid-cols-[1.3fr_1fr_120px]">
+                <div key={a.id} className="grid gap-2 border-b border-line/70 pb-3 sm:grid-cols-[1fr_120px]">
                   <input type="hidden" name="ap_id" value={a.id} />
-                  <label><span className="label">Nombre</span><input name={`ap_nombre_${a.id}`} defaultValue={a.nombre} className="field" /></label>
+                  <label className="sm:col-span-2"><span className="label">Nombre</span><input name={`ap_nombre_${a.id}`} defaultValue={a.nombre} className="field" /></label>
                   <label><span className="label">Cargo</span><input name={`ap_cargo_${a.id}`} defaultValue={a.cargo} className="field" /></label>
                   <label><span className="label">Hasta S/</span><input name={`ap_tope_${a.id}`} defaultValue={a.monto_hasta ?? ''} placeholder="Sin tope" inputMode="decimal" className="field tabular" /></label>
                 </div>
               ))}
-              <div className="flex justify-end"><SubmitButton>Guardar aprobadores</SubmitButton></div>
+              <div className="flex justify-end"><SubmitButton soloConCambios>Guardar aprobadores</SubmitButton></div>
             </ActionForm>
           </Section>
 
@@ -89,7 +89,7 @@ export default async function ConfiguracionPage() {
                       <Select name="rol" options={(roles ?? []).map((r) => ({ id: r.codigo, nombre: r.nombre }))} defaultValue={u.rol} required className="h-8 w-44" />
                       <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" name="todos_locales" defaultChecked={u.todos_locales} className="accent-brand-600" /> Ambos negocios</label>
                       <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" name="activo" defaultChecked={u.activo} className="accent-brand-600" /> Activo</label>
-                      <SubmitButton size="sm" variant="outline">Guardar</SubmitButton>
+                      <SubmitButton size="sm" variant="outline" soloConCambios>Guardar</SubmitButton>
                     </ActionForm>
                   </Td>
                 </tr>
@@ -108,7 +108,7 @@ export default async function ConfiguracionPage() {
               <input name="codigo" placeholder="Código" required className="field" />
               <input name="nombre" placeholder="Nombre" required className="field md:col-span-2" />
               <Select name="local" options={locales} />
-              <Select name="tipo_almacen" required defaultValue="area" options={[{ id: 'area', nombre: 'Área' }, { id: 'almacen', nombre: 'Almacén' }, { id: 'oficina', nombre: 'Oficina' }, { id: 'cocina', nombre: 'Cocina' }, { id: 'bar', nombre: 'Bar' }, { id: 'activos', nombre: 'Activos' }]} />
+              <Select name="tipo_almacen" required defaultValue="area" options={[{ id: 'area', nombre: 'Área' }, { id: 'almacen', nombre: 'Almacén' }, { id: 'cocina', nombre: 'Cocina' }, { id: 'bar', nombre: 'Bar' }, { id: 'activos', nombre: 'Activos' }]} />
               <div className="col-span-2 md:col-span-5"><SubmitButton size="sm" variant="outline">Agregar almacén</SubmitButton></div>
             </ActionForm>
           </div>

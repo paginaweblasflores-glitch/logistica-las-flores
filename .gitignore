@@ -43,3 +43,11 @@ Thumbs.db
 desktop.ini
 *.log
 npm-debug.log*
+
+# --- Coordinación entre agentes y credenciales TEMPORALES de prueba (solo en esta PC) ---
+interaccion_agentes.md
+credenciales-temporales.local.md
+*.local.md
+
+# capturas de revisiones de interfaz (QA): no van al repositorio
+qa-ui-*/

@@ -7,7 +7,7 @@ import { getCiudades, getProveedores } from '@/lib/queries'
 import { fmtDate, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, FiltroFechas, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 
@@ -21,7 +21,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   const params = await searchParams
   const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
   const almacen = panel === 'almacen'
-  const { page, size, from, to } = paginar(params)
+  const { from, to } = paginar(params)
   // El almacén ve las órdenes aprobadas que debe recibir (y las ya recibidas)
   const estado = sp(params, 'estado', almacen ? 'aprobada' : ''), proveedor = sp(params, 'proveedor'), ciudad = sp(params, 'ciudad')
   const desde = sp(params, 'desde', `${hoyLima().slice(0, 4)}-01-01`), hasta = sp(params, 'hasta', hoyLima())
@@ -66,8 +66,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
         <FilterField label="Proveedor" className="min-w-56"><Select name="proveedor" options={proveedores} defaultValue={proveedor} placeholder="Todos" /></FilterField>
         <FilterField label="Origen"><Select name="ciudad" options={ciudades} defaultValue={ciudad} placeholder="Todos" /></FilterField>
         <FilterField label="Estado"><Select name="estado" options={almacen ? ESTADOS.filter((e) => e.id === 'aprobada' || e.id === 'recibida') : ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
       <Section icon={ShoppingCart} title="Compras registradas" bodyClassName="p-0"
         stats={c ? [{ label: 'Total', value: fmtSoles(c.total) }, { label: 'Transporte', value: fmtSoles(c.transporte) }, { label: 'Ahorro', value: fmtSoles(c.ahorro) }, { label: 'Sobrecosto', value: fmtSoles(c.sobrecosto) }] : []}>
@@ -78,7 +77,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {(data as Row[]).map((r) => (
                   <tr key={r.id} className="hover:bg-canvas/60">
-                    <Td><Link href={`/compras/${r.id}`} className="font-semibold text-brand-600">{r.numero}</Link>
+                    <Td><Link href={`/compras/${r.id}`} className="enlace">{r.numero}</Link>
                       {r.diferencias_precio > 0 && <span className="mt-0.5 block"><Badge tone="amber">Precio ≠ orden</Badge></span>}</Td>
                     <Td className="tabular">{fmtDate(r.fecha)}</Td>
                     <Td><LocalBadge codigo={r.local_codigo} /></Td>

@@ -5,7 +5,7 @@ import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/sessi
 import { fmtDate, hoyLima } from '@/lib/format'
 import { sp, cn } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
-import { PageHeader, Section, Table, Th, Td, Pagination, EmptyState, LinkButton, EstadoBadge, LocalBadge, Note, FilterBar, FilterField } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, Pagination, EmptyState, LinkButton, EstadoBadge, LocalBadge, Note, FilterBar, FilterField, FiltroFechas } from '@/components/ui'
 import { Select } from '@/components/select'
 
 export const metadata = { title: 'Traspasos' }
@@ -52,8 +52,7 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
       {pend > 0 && <div className="mb-4"><Note tone="warn">Tiene <b>{pend}</b> {pend === 1 ? 'traspaso' : 'traspasos'} por recibir: aparecen resaltados en la lista con «Recibir →».</Note></div>}
       <FilterBar>
         {local && <FilterField label="Tipo"><Select name="ver" options={tipos} defaultValue={vista} required /></FilterField>}
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
 
       <Section icon={ArrowLeftRight} title="Historial de traspasos" bodyClassName="p-0" stats={[{ label: 'Registros', value: count ?? 0 }]}>
@@ -65,7 +64,7 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
                 const porRecibir = local && t.estado === 'pendiente' && t.local_destino_id === local.id
                 return (
                   <tr key={t.id} className={cn('hover:bg-canvas/60', porRecibir && 'bg-amber-50/50')}>
-                    <Td><Link href={`/traslados/${t.id}`} className="font-semibold text-brand-600">{t.numero}</Link></Td>
+                    <Td><Link href={`/traslados/${t.id}`} className="enlace">{t.numero}</Link></Td>
                     <Td className="whitespace-nowrap tabular">{fmtDate(t.fecha, true)}</Td>
                     <Td>
                       <span className="flex flex-wrap items-center gap-1.5">
@@ -76,7 +75,7 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
                     </Td>
                     <Td className="text-sm">{t.motivo ?? '—'}{t.recibe && <span className="block text-xs text-muted">Entregado a: {t.recibe}</span>}</Td>
                     <Td right>{t.traslado_detalle[0]?.count ?? 0}</Td>
-                    <Td>{porRecibir ? <Link href={`/traslados/${t.id}`} className="text-xs font-bold text-brand-600">Recibir →</Link> : <EstadoBadge estado={t.estado} />}</Td>
+                    <Td>{porRecibir ? <Link href={`/traslados/${t.id}`} className="text-xs enlace">Recibir →</Link> : <EstadoBadge estado={t.estado} />}</Td>
                   </tr>
                 )
               })}</tbody>

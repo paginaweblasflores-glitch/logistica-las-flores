@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { run, check, must, type ActionResult } from '@/lib/actions'
+import { run, afecto, check, enUnaOperacion, type ActionResult } from '@/lib/actions'
 import { parseLines, num, limaIso } from '@/lib/lines'
 
 export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise<ActionResult> {
@@ -30,23 +30,23 @@ export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise
       for (const s of data ?? []) stock.set(s.producto_id, Number(s.cantidad))
     }
 
-    const req = must(await supabase.from('requerimiento').insert({
+    // requerimiento y sus bienes juntos (sin requerimientos vacíos si falla un bien)
+    const hecho = await enUnaOperacion(supabase, [{ insertar: 'requerimiento', como: 'req', valores: {
       local_id: localId, area_id: fd.get('area') || null, solicitante: String(fd.get('solicitante')).trim().toUpperCase(),
       cargo_solicitante: String(fd.get('cargo') ?? '').trim() || null, firma_solicitante: firma || null,
       prioridad: String(fd.get('prioridad') ?? 'normal'), fecha_requerida: fd.get('fecha_requerida') || null,
       observacion: fd.get('observacion') || null,
-    }).select('id').single())
-    check(await supabase.from('requerimiento_detalle').insert(lineas.map((l) => ({
-      requerimiento_id: req.id, producto_id: l.producto_id, descripcion: l.descripcion,
+    } }, { insertar: 'requerimiento_detalle', valores: lineas.map((l) => ({
+      requerimiento_id: '@id:req', producto_id: l.producto_id || null, descripcion: l.descripcion,
       stock_actual: l.producto_id ? stock.get(l.producto_id) ?? 0 : null, cantidad_solicitada: num(l.cantidad),
       precio_estimado: num(l.precio_estimado), motivo: l.motivo || null,
       marca: l.marca || null, area_destino: l.area_destino ? String(l.area_destino).toUpperCase() : null,
       imagen: fotoValida(l.imagen) ? l.imagen : null,
       // la unidad en que lo pide el área (Unidad, Caja, Kilo…)
       unidad_pedido_id: l.unidad_id || null, cantidad_pedida: l.unidad_id ? num(l.cantidad) : null,
-    }))))
+    })) }])
     revalidatePath('/requerimientos')
-    redirect(`/requerimientos/${req.id}`)
+    redirect(`/requerimientos/${hecho.req}`)
   })
 }
 
@@ -91,23 +91,28 @@ export async function aprobarRequerimiento(_: ActionResult, fd: FormData): Promi
     if (actual?.estado !== 'solicitado') return { error: 'Este requerimiento ya fue revisado: solo puede consultarse.' }
     // { detalle_id: cantidad aprobada } — los productos no marcados llegan con 0 (no aprobados)
     const aprobadas = JSON.parse(String(fd.get('aprobadas') ?? '{}')) as Record<string, number>
-    // no se aprueba más de lo pedido
+    // 1) validar TODO antes de escribir
     const { data: sol } = await supabase.from('requerimiento_detalle').select('id, cantidad_solicitada').eq('requerimiento_id', id)
     const tope = Object.fromEntries((sol ?? []).map((d) => [d.id, Number(d.cantidad_solicitada)]))
-    if (Object.entries(aprobadas).some(([det, cant]) => Number(cant) > (tope[det] ?? 0) + 0.0001)) return { error: 'No se puede aprobar más de lo que se pidió.' }
-    for (const [det, cant] of Object.entries(aprobadas)) {
-      check(await supabase.from('requerimiento_detalle').update({ cantidad_aprobada: Math.max(0, Number(cant) || 0) }).eq('id', det))
-    }
+    if (Object.keys(aprobadas).some((det) => !(det in tope))) return { error: 'Uno de los productos no pertenece a este requerimiento. Recargue la página.' }
+    if (Object.values(aprobadas).some((c) => !Number.isFinite(Number(c)) || Number(c) < 0)) return { error: 'Las cantidades aprobadas no pueden ser negativas.' }
+    // no se aprueba más de lo pedido
+    if (Object.entries(aprobadas).some(([det, cant]) => Number(cant) > tope[det] + 0.0001)) return { error: 'No se puede aprobar más de lo que se pidió.' }
     const alguno = Object.values(aprobadas).some((c) => Number(c) > 0)
     const aprobador = String(fd.get('aprobador') ?? '')
     // quién lo aprobó: el que firmó la hoja impresa (Fernanda, Betsy o Mijaíl)
     // el de las áreas lleva quién lo aprobó (firmó la hoja); el del almacén solo se aprueba
     if (alguno && !aprobador && actual?.origen !== 'almacen') return { error: 'Elija quién aprobó el requerimiento (quien firmó la hoja).' }
     const { data: ap } = aprobador ? await supabase.from('requerimiento_aprobador').select('nombre').eq('id', aprobador).maybeSingle() : { data: null }
-    check(await supabase.from('requerimiento').update({
+    // 2) tomar el requerimiento solo si sigue «solicitado» (si otra pestaña ya lo revisó, no se pisa)
+    afecto(await supabase.from('requerimiento').update({
       estado: alguno ? 'aprobado' : 'rechazado', aprobador_id: aprobador || null,
       aprobado_por: ap?.nombre ?? 'Logística', aprobado_at: new Date().toISOString(),
-    }).eq('id', id))
+    }).eq('id', id).eq('estado', 'solicitado').select('id'), 'Este requerimiento ya fue revisado: recargue la página.')
+    // 3) cantidades aprobadas, cada una acotada a ESTE requerimiento
+    for (const [det, cant] of Object.entries(aprobadas)) {
+      check(await supabase.from('requerimiento_detalle').update({ cantidad_aprobada: Number(cant) }).eq('id', det).eq('requerimiento_id', id))
+    }
     revalidatePath('/requerimientos', 'layout')
     return { message: alguno ? 'Requerimiento aprobado: ya puede pasar a cotización o compra.' : 'No se aprobó ningún producto: el requerimiento quedó rechazado.' }
   })
@@ -137,19 +142,22 @@ export async function cotizarRequerimiento(_: ActionResult, fd: FormData): Promi
     const { data: r } = await supabase.from('requerimiento')
       .select('local_id, numero, requerimiento_detalle(id, producto_id, descripcion, cantidad_solicitada, cantidad_aprobada, cantidad_pedida, pedida:unidad_pedido_id(nombre), producto:producto_id(unidad:unidad_id(codigo)))')
       .eq('id', id).single()
-    const cot = must(await supabase.from('cotizacion').insert({ requerimiento_id: id, local_id: r!.local_id, titulo: `Requerimiento ${r!.numero}` }).select('id').single())
     type D = { id: string; producto_id: string | null; descripcion: string; cantidad_solicitada: number; cantidad_aprobada: number | null
       cantidad_pedida: number | null; pedida: { nombre: string } | null; producto: { unidad: { codigo: string } } | null }
     // se cotiza en la unidad en que se pidió (3 Saco): factor = unidades del producto por cada una
     const factor = (d: D) => (Number(d.cantidad_pedida) > 0 && d.pedida && Number(d.cantidad_pedida) !== Number(d.cantidad_solicitada) ? Number(d.cantidad_solicitada) / Number(d.cantidad_pedida) : 1)
     // Solo lo aprobado pasa a cotización (si aún no se aprobó, se cotiza lo solicitado)
-    check(await supabase.from('cotizacion_item').insert(((r!.requerimiento_detalle ?? []) as unknown as D[]).filter((d) => d.cantidad_aprobada === null || Number(d.cantidad_aprobada) > 0).map((d) => ({
-      cotizacion_id: cot.id, requerimiento_detalle_id: d.id, producto_id: d.producto_id, descripcion: d.descripcion,
+    const ids = await enUnaOperacion(supabase, [
+      { actualizar: 'requerimiento', valores: { estado: 'en_cotizacion' }, donde: { id, estado: ['aprobado'] },
+        exigir: 'Este requerimiento ya pasó a cotización o compra: recargue la página.' },
+      { insertar: 'cotizacion', como: 'cot', valores: { requerimiento_id: id, local_id: r!.local_id, titulo: `Requerimiento ${r!.numero}` } },
+      { insertar: 'cotizacion_item', valores: ((r!.requerimiento_detalle ?? []) as unknown as D[]).filter((d) => d.cantidad_aprobada === null || Number(d.cantidad_aprobada) > 0).map((d) => ({
+      cotizacion_id: '@id:cot', requerimiento_detalle_id: d.id, producto_id: d.producto_id, descripcion: d.descripcion,
       cantidad: d.cantidad_aprobada ?? d.cantidad_solicitada, unidad: d.producto?.unidad.codigo ?? d.pedida?.nombre ?? 'UND',
       ...(factor(d) !== 1 ? { factor: factor(d), unidad_pedido: d.pedida!.nombre, cantidad_pedida: Math.round(Number(d.cantidad_aprobada ?? d.cantidad_solicitada) / factor(d) * 10000) / 10000 } : {}),
-    }))))
-    check(await supabase.from('requerimiento').update({ estado: 'en_cotizacion' }).eq('id', id))
+    })) },
+    ])
     revalidatePath('/requerimientos', 'layout')
-    redirect(`/cotizaciones/${cot.id}`)
+    redirect(`/cotizaciones/${ids.cot}`)
   })
 }

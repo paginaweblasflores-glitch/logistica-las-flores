@@ -71,6 +71,26 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
   })
 }
 
+/** Stock inicial del producto en un almacén: entrada «Producto nuevo», UNA sola vez (si ya tiene, no se cambia). */
+export async function registrarStockInicial(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const s = (k: string) => String(fd.get(k) ?? '').trim() || null
+    const id = s('producto_id'), almacen = s('almacen')
+    const cantidad = Number(s('cantidad'))
+    const precio = s('precio') === null ? null : Number(s('precio'))
+    if (!id || !almacen) return { error: 'Elija el almacén.' }
+    if (!Number.isFinite(cantidad) || cantidad <= 0) return { error: 'Escriba la cantidad que tiene hoy (mayor a cero).' }
+    if (precio !== null && (!Number.isFinite(precio) || precio < 0)) return { error: 'El precio no puede ser negativo.' }
+    const supabase = await createClient()
+    const r = must(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen,
+      p_lineas: [{ producto_id: id, cantidad, precio, fecha_vencimiento: s('fecha_vencimiento') }] })) as { registrados: number; omitidos: number }
+    revalidatePath(`/productos/${id}`)
+    revalidatePath('/productos')
+    revalidatePath('/inventario', 'layout')
+    return r.registrados ? { message: 'Stock inicial registrado: ya está en Inventario y en el Kardex.' } : { error: 'Este producto ya tenía su stock inicial: no se cambió.' }
+  })
+}
+
 /** Agrega al almacén elegido un producto que ya existe en el catálogo principal (recibe el código de ese almacén). */
 async function agregarAlAlmacen(supabase: Awaited<ReturnType<typeof createClient>>, productoId: string, almacenId: string) {
   check(await supabase.from('producto_almacen').upsert({ producto_id: productoId, almacen_id: almacenId, stock_minimo: 0 }, { onConflict: 'producto_id,almacen_id', ignoreDuplicates: true }))
@@ -173,19 +193,5 @@ export async function bajaProducto(_: ActionResult, fd: FormData): Promise<Actio
     const { data: mio } = await supabase.from('producto').select('activo').eq('id', id).maybeSingle()
     if (!activo && sigue && mio?.activo) redirect('/productos')
     return { message: activo ? 'Producto reactivado.' : 'Producto dado de baja: ya no aparece en las listas, su historial se conserva.' }
-  })
-}
-
-/** Separar productos entre los almacenes del negocio (Almacén 01 «arriba» / Almacén 02 «abajo»): los marcados pasan al otro. */
-export async function moverProductos(_: ActionResult, fd: FormData): Promise<ActionResult> {
-  return run(async () => {
-    const productos = JSON.parse(String(fd.get('productos') ?? '[]')) as string[]
-    if (!productos.length) return { error: 'Marque al menos un producto.' }
-    const supabase = await createClient()
-    const r = must(await supabase.rpc('fn_mover_productos_almacen', {
-      p_productos: productos, p_origen: String(fd.get('origen')), p_destino: String(fd.get('destino')),
-    })) as { movidos: number; omitidos: number }
-    revalidatePath('/productos', 'layout')
-    return { message: `${r.movidos} producto(s) pasaron al otro almacén.${r.omitidos ? ` ${r.omitidos} no se movieron porque ya tienen cantidad.` : ''}` }
   })
 }

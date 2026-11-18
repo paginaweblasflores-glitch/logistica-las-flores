@@ -17,7 +17,7 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
   const params = await searchParams
   const supabase = await createClient()
   const ciudades = await getCiudades()
-  const { page, size, from, to } = paginar(params)
+  const { from, to } = paginar(params)
   const q = sp(params, 'q'), ciudad = sp(params, 'ciudad'), estado = sp(params, 'estado', 'activos'), tipo = sp(params, 'tipo')
   const anio = Number(hoyLima().slice(0, 4))
 

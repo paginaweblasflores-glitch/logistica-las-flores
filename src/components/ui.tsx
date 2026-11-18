@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
-import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import { ChevronLeft, Filter, Inbox, Info, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { KeepSize, UrlPagination } from '@/components/pager'
 
@@ -34,7 +34,7 @@ export function Section({ icon: Icon, title, stats, actions, children, className
       <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           {Icon && (
-            <span className="grid size-8 place-items-center rounded-full bg-brand-600 text-white">
+            <span className="grid size-8 place-items-center rounded-full bg-brand-50 text-brand-700">
               <Icon className="size-4" />
             </span>
           )}
@@ -71,7 +71,7 @@ export function Stat({ label, value, hint, tone = 'default', icon: Icon, meta }:
   return (
     <div className="card relative overflow-hidden p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold tracking-wide text-muted uppercase">{label}</p>
+        <p className="text-[13px] font-semibold text-muted">{label}</p>
         {Icon && <Icon className="size-4 text-subtle" />}
       </div>
       <p className={cn('mt-2 text-[26px] leading-none font-bold tracking-tight tabular',
@@ -97,6 +97,7 @@ const TONES = {
   blue: 'bg-sky-50 text-sky-700 ring-sky-200',
   violet: 'bg-violet-50 text-violet-700 ring-violet-200',
   dark: 'bg-ink-900 text-white ring-ink-900',
+  salida: 'bg-salida-50 text-salida-600 ring-salida-600/20',
 } as const
 export type Tone = keyof typeof TONES
 
@@ -143,8 +144,8 @@ export function LocalBadge({ codigo }: { codigo?: string | null }) {
 const BTN = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm',
   dark: 'bg-ink-900 text-white hover:bg-ink-700 shadow-sm',
-  outline: 'border border-line bg-white text-ink-900 hover:bg-canvas',
-  ghost: 'text-ink-700 hover:bg-canvas',
+  outline: 'border border-field bg-white text-ink-700 hover:border-field-hover hover:bg-sand hover:text-ink-900',
+  ghost: 'text-ink-700 hover:bg-sand',
   danger: 'border border-brand-200 bg-white text-brand-700 hover:bg-brand-50',
 } as const
 export type BtnVariant = keyof typeof BTN
@@ -187,11 +188,20 @@ export function EmptyState({ title, description, action }: { title: string; desc
 /* ───────────────────────── Filtros (formulario GET) ───────────────────────── */
 export function FilterBar({ children, action }: { children: React.ReactNode; action?: string }) {
   return (
-    <form action={action} className="no-print mb-4 flex flex-wrap items-end gap-3">
+    <form action={action} className="card no-print mb-4 flex flex-wrap items-end gap-3 px-4 py-3">
       <KeepSize />
       {children}
-      <button className={btnClass('dark')}>Filtrar</button>
+      <button className={btnClass('outline')}><Filter className="size-4" /> Filtrar</button>
     </form>
+  )
+}
+/** Rango de fechas de un filtro: «Desde» y «Hasta» van siempre juntos (no se parten en dos filas). */
+export function FiltroFechas({ desde, hasta }: { desde?: string; hasta?: string }) {
+  return (
+    <div className="flex items-end gap-2" role="group" aria-label="Rango de fechas">
+      <label className="block"><span className="label">Desde</span><input type="date" name="desde" defaultValue={desde} className="field w-40" /></label>
+      <label className="block"><span className="label">Hasta</span><input type="date" name="hasta" defaultValue={hasta} className="field w-40" /></label>
+    </div>
   )
 }
 export function FilterField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
@@ -212,9 +222,10 @@ export function Pagination({ total, prefijo }: { total: number; prefijo?: string
 /* Nota informativa (explica cálculos y diferencias con los Excel) */
 export function Note({ children, tone = 'info' }: { children: React.ReactNode; tone?: 'info' | 'warn' }) {
   return (
-    <div className={cn('rounded-xl border px-4 py-3 text-sm',
-      tone === 'info' ? 'border-sky-200 bg-sky-50/70 text-sky-900' : 'border-amber-200 bg-amber-50 text-amber-900')}>
-      {children}
+    <div className={cn('flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm',
+      tone === 'info' ? 'border-line bg-sand text-ink-700' : 'border-amber-200 bg-amber-50 text-amber-900')}>
+      {tone === 'info' ? <Info className="mt-0.5 size-4 shrink-0 text-muted" /> : <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />}
+      <div className="min-w-0">{children}</div>
     </div>
   )
 }

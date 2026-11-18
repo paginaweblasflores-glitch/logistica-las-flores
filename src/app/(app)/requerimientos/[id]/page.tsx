@@ -9,7 +9,7 @@ import type { Aprobador } from '@/lib/aprobadores'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
-import { PageHeader, Section, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
+import { PageHeader, Section, EstadoBadge, LinkButton, Note } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { PrintButton } from '@/components/print-button'
@@ -221,8 +221,8 @@ export default async function RequerimientoPage({ params }: {
         </div>
 
         {(compras?.length || cots?.length) ? (
-          <p className="no-print mt-6 text-xs text-muted">Documentos: {cots?.map((c) => <Link key={c.id} href={`/cotizaciones/${c.id}`} className="mr-2 font-semibold text-brand-600">{c.numero}</Link>)}
-            {compras?.map((c) => <Link key={c.id} href={`/compras/${c.id}`} className="mr-2 font-semibold text-brand-600">{c.numero}</Link>)}</p>
+          <p className="no-print mt-6 text-xs text-muted">Documentos: {cots?.map((c) => <Link key={c.id} href={`/cotizaciones/${c.id}`} className="mr-2 enlace">{c.numero}</Link>)}
+            {compras?.map((c) => <Link key={c.id} href={`/compras/${c.id}`} className="mr-2 enlace">{c.numero}</Link>)}</p>
         ) : null}
       </section>
 

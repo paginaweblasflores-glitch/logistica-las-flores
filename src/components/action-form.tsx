@@ -20,6 +20,8 @@ export function ActionForm({ action, children, className, resetOnSuccess, id, on
   const ref = useRef<HTMLFormElement>(null)
   useEffect(() => {
     if (!state) return
+    // los botones «solo con cambios» leen el resultado: si falló, lo escrito sigue sin guardar
+    if (ref.current) ref.current.dataset.resultado = state.error ? 'error' : 'ok'
     if (state.error) toast.error(state.error)
     else if (state.message) {
       toast.success(state.message)

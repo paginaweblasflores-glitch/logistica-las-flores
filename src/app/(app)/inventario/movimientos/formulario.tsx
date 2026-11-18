@@ -1,4 +1,4 @@
-import { AvisoStockDia } from '@/components/aviso-stock-dia'
+import { AvisoStockDia, estadoStockDia } from '@/components/aviso-stock-dia'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { ElegirAlmacen } from '@/components/elegir-almacen'
@@ -10,6 +10,7 @@ import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { LineasEntradaSalida } from './lineas-es'
 import { registrarEntradaSalida } from './actions'
+import { ahoraLima } from '@/lib/format'
 
 /** Tipos que se eligen en «Tipo de entrada / salida»: los fijos y los que el almacén escribió antes («Donación»…) */
 export async function opcionesTipo(sentido: Sentido, fijos: TipoOpc[]) {
@@ -22,6 +23,7 @@ export async function opcionesTipo(sentido: Sentido, fijos: TipoOpc[]) {
 export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: { sentido: Sentido; tipo: string; tabs: React.ReactNode
   /** tipo escrito por el almacén («Donación»…): suma como un sobrante o resta como un faltante, con su nombre */
   motivo?: string }) {
+  void estadoStockDia()   // precarga: el aviso del stock del día se consulta junto con lo demás
   const entrada = sentido === 'entrada'
   const ruta = entrada ? '/entradas' : '/salidas'
   const titulo = entrada ? 'Nueva entrada' : 'Nueva salida'
@@ -34,7 +36,7 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
     ? await supabase.from('area').select('id, nombre').eq('activo', true).or(`local_id.is.null${local ? `,local_id.eq.${local.id}` : ''}`).order('nombre')
     : { data: [] }
   const ayuda = motivo ? '' : TIPOS_MANUALES[sentido].find((t) => t.codigo === tipo)?.ayuda
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16) // hora de Lima
+  const ahora = ahoraLima()
 
   return (
     <>

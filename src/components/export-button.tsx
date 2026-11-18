@@ -44,9 +44,13 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
         if (!data || data.length < 1000 || rows.length > 200_000) break
       }
       const XLSX = await import('xlsx')
+      // solo las cantidades pasan a número: los códigos y documentos quedan como texto («00123» no se vuelve 123)
+      const esCodigo = (k: string, label: string) => /codigo|cod|cód|nro|numero|n°|documento|guia|guía|ruc|serie|placa|telefono/i.test(`${k} ${label}`)
       const sheet = XLSX.utils.json_to_sheet(rows.map((r) => Object.fromEntries(Object.entries(columns).map(([k, label]) => {
         const v = r[k]
-        return [label, typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v]
+        const numero = typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) && !esCodigo(k, label)
+          && !/^-?0\d/.test(v) && v.replace(/[-.]/g, '').length <= 15
+        return [label, numero ? Number(v) : v]
       }))))
       if (pie?.length) XLSX.utils.sheet_add_aoa(sheet, [[], ...pie], { origin: -1 })
       sheet['!cols'] = Object.values(columns).map((c) => ({ wch: Math.max(12, c.length + 4) }))

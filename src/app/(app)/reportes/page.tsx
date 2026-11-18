@@ -54,8 +54,6 @@ export default async function ReportesPage({ searchParams }: { searchParams: Pro
     { label: 'Diferencia de inventario (S/)', key: 'diferencia_inventario', fmt: fmtSoles, global: sum('diferencia_inventario'), mejor: 'bajo' },
     { label: 'Diferencia de inventario (%)', key: 'pct_diferencia', fmt: fmtPct, global: null, mejor: 'bajo' },
     { label: 'OTIF', key: 'otif', fmt: fmtPct, global: null, mejor: 'alto' },
-    { label: 'Descuentos al personal', key: 'descuentos', fmt: fmtSoles, global: sum('descuentos') },
-    { label: 'Roturas de utensilios', key: 'roturas', fmt: fmtSoles, global: sum('roturas'), mejor: 'bajo' },
     { label: 'Requerimientos atendidos', key: 'requerimientos', fmt: (v) => String(v ?? 0), global: sum('requerimientos') },
   ]
 

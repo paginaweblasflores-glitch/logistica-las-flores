@@ -46,7 +46,7 @@ export function ProveedorForm({ p = {}, ciudades }: { p?: Proveedor; ciudades: O
         <label className="flex items-center gap-2"><input type="checkbox" name="es_transportista" defaultChecked={p.es_transportista} className="size-4 accent-brand-600" /> Es transportista</label>
         <label className="flex items-center gap-2"><input type="checkbox" name="activo" value="on" defaultChecked={p.activo ?? true} className="size-4 accent-brand-600" /> Activo</label>
         <input type="hidden" name="activo" value="off" />
-        <SubmitButton className="ml-auto">{p.id ? 'Guardar cambios' : 'Registrar proveedor'}</SubmitButton>
+        <SubmitButton className="ml-auto" soloConCambios={!!p.id}>{p.id ? 'Guardar cambios' : 'Registrar proveedor'}</SubmitButton>
       </div>
     </ActionForm>
   )

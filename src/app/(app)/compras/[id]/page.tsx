@@ -96,7 +96,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
   return (
     <>
       <PageHeader title={`Compra ${c.numero}`} back={{ href: '/compras', label: almacen ? 'Recepción de compras' : 'Compras' }}
-        description={<><b className="text-ink-900">{negocio ? etiquetaNegocio(negocio) : c.local_codigo}</b> · {c.proveedor ?? 'Sin proveedor'} · {c.ciudad ?? 'origen no indicado'} · {fmtDate(c.fecha)}{req && <> · Requerimiento <Link className="font-semibold text-brand-600" href={`/requerimientos/${req.id}`}>{req.numero}</Link></>}</>}
+        description={<><b className="text-ink-900">{negocio ? etiquetaNegocio(negocio) : c.local_codigo}</b> · {c.proveedor ?? 'Sin proveedor'} · {c.ciudad ?? 'origen no indicado'} · {fmtDate(c.fecha)}{req && <> · Requerimiento <Link className="enlace" href={`/requerimientos/${req.id}`}>{req.numero}</Link></>}</>}
         actions={<>
           <EstadoBadge estado={c.estado} />
           {!almacen && c.estado === 'borrador' && (
@@ -173,7 +173,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
         <p className="mb-5 rounded-xl border border-line bg-white px-4 py-3 text-sm text-muted">Esta compra llega a <b>{almacenSel.lista.find((a) => a.id === c.almacen_id)?.corto ?? 'otro almacén'}</b>: elíjalo arriba para registrar la llegada.</p>
       )}
       {almacen && c.estado === 'aprobada' && !c.solo_fuera_catalogo && esMiAlmacen && (
-        <div className="mb-5"><Note>Cuando llegue, regístrela en <Link href={`/entradas/nueva?tipo=compra&compra=${id}`} className="font-semibold text-brand-600">Entradas → Compra con boleta</Link>: lo pedido ya viene cargado y usted completa lo de la boleta.</Note></div>
+        <div className="mb-5"><Note>Cuando llegue, regístrela en <Link href={`/entradas/nueva?tipo=compra&compra=${id}`} className="enlace">Entradas → Compra con boleta</Link>: lo pedido ya viene cargado y usted completa lo de la boleta.</Note></div>
       )}
       {!almacen && c.estado === 'aprobada' && c.solo_fuera_catalogo && (
         <Section icon={PackageCheck} title="Registrar llegada" className="mb-5">

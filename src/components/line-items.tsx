@@ -109,17 +109,22 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
   const ids = lines.map((l) => l.producto_id).filter(Boolean).sort().join(',')
   useEffect(() => {
     if (!mostrarVence || !almacenId || !ids) return
-    createClient().from('v_lote_fifo').select('producto_id, fecha_vencimiento, cantidad_disponible')
-      .eq('almacen_id', almacenId).in('producto_id', ids.split(',')).order('orden_salida')
-      .then(({ data }) => {
-        const m: Record<string, { fv: string | null; disp: number }[]> = {}
-        for (const x of data ?? []) (m[x.producto_id] ??= []).push({ fv: x.fecha_vencimiento, disp: Number(x.cantidad_disponible) })
-        setLotes(m)
-      })
+    // si cambian los productos o el almacén antes de que llegue la respuesta, esa respuesta ya no vale
+    let vigente = true
+    const cargar = async () => {
+      const { data, error } = await createClient().from('v_lote_fifo').select('producto_id, fecha_vencimiento, cantidad_disponible')
+        .eq('almacen_id', almacenId).in('producto_id', ids.split(',')).order('orden_salida')
+      if (!vigente) return
+      const m: Record<string, { fv: string | null; disp: number }[]> = {}
+      if (!error) for (const x of data ?? []) (m[x.producto_id] ??= []).push({ fv: x.fecha_vencimiento, disp: Number(x.cantidad_disponible) })
+      setLotes(m)
+    }
+    void cargar()
+    return () => { vigente = false }
   }, [mostrarVence, almacenId, ids])
   // de qué fechas sale la cantidad escrita (en la unidad del producto); sin cantidad, la primera
   const entregar = (l: Line) => {
-    const ls = lotes[l.producto_id ?? '']
+    const ls = mostrarVence && almacenId && ids ? lotes[l.producto_id ?? ''] : undefined
     if (!ls?.length || ls.every((x) => !x.fv)) return null
     const f = campoUnidad ? factorUnidad(unidades, l, l[campoUnidad.key], l.equivale) ?? 1 : 1
     let resto = (Number(l.cantidad) || 0) * f

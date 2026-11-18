@@ -118,7 +118,7 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
         {ponCantidad && <p className="-mt-2 text-xs text-muted">La cantidad entra al stock como una entrada «Producto nuevo» (E-…) y queda en el Kardex. Después cambia con entradas, salidas, traspasos o conteos.</p>}
 
         <div className="flex flex-wrap items-center gap-5 text-sm">
-          {!soloLectura && <SubmitButton className="ml-auto">{crear ? 'Crear producto' : 'Guardar cambios'}</SubmitButton>}
+          {!soloLectura && <SubmitButton className="ml-auto" soloConCambios={!crear}>{crear ? 'Crear producto' : 'Guardar cambios'}</SubmitButton>}
         </div>
       </fieldset>
     </ActionForm>

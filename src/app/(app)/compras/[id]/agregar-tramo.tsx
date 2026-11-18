@@ -17,7 +17,7 @@ export function AgregarTramo({ compraId, localId, transportistas, ciudades, ciud
   if (!abierto) {
     return (
       <div className="border-t border-line px-5 py-3">
-        <button type="button" onClick={() => setAbierto(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
+        <button type="button" onClick={() => setAbierto(true)} className="enlace inline-flex items-center gap-1.5 text-sm">
           <Plus className="size-4" /> Agregar tramo
         </button>
       </div>

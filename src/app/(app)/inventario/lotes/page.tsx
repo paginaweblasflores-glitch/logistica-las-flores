@@ -94,12 +94,12 @@ async function ReporteLotes({ supabase, local }: { supabase: Cliente; local: str
       </div>
       <Section icon={Layers} title="Lotes en almacén" bodyClassName="p-0">
         {rows.length ? (
-          <PagedTable head={<tr><Th right>Cód.</Th><Th>Producto</Th><Th>Almacén</Th><Th right>Orden de salida</Th><Th>Ingreso</Th><Th>Vence</Th><Th right>Saldo</Th><Th right>Valor</Th></tr>}>{rows.map((r) => (
+          <PagedTable head={<tr><Th right>Cód.</Th><Th>Producto</Th><Th>Almacén</Th><Th right>Orden de salida</Th><Th>Ingreso</Th><Th>Vence</Th><Th right>Queda en el lote</Th><Th right>Valor</Th></tr>}>{rows.map((r) => (
               <tr key={r.id}><Td right className="font-mono text-xs font-semibold">{r.codigo_almacen ?? '—'}</Td><Td className="font-medium">{r.producto}</Td><Td className="text-xs">{r.almacen}</Td>
                 <Td right>{r.orden_salida === 1 ? <Badge tone="dark">Sale primero</Badge> : `${r.orden_salida}º`}</Td>
                 <Td className="tabular">{fmtDate(r.fecha_ingreso)}</Td>
                 <Td className="tabular">{r.fecha_vencimiento ? <>{fmtDate(r.fecha_vencimiento)}{r.estado !== 'vigente' && <span className="ml-1.5"><EstadoBadge estado={r.estado} /></span>}</> : <span className="text-subtle">—</span>}</Td>
-                <Td right>{fmtQty(r.cantidad_disponible)} / {fmtQty(r.cantidad_inicial)}</Td><Td right>{fmtSoles(valor(r))}</Td></tr>
+                <Td right><b>{fmtQty(r.cantidad_disponible)}</b> <span className="text-xs text-muted">de {fmtQty(r.cantidad_inicial)} que entraron</span></Td><Td right>{fmtSoles(valor(r))}</Td></tr>
             ))}</PagedTable>
         ) : <EmptyState title="No hay lotes activos" />}
       </Section>

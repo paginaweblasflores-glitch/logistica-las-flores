@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ClipboardList, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
-import { fmtDate, fmtPct, fmtSoles } from '@/lib/format'
+import { fmtDate, fmtPct, fmtSoles, haceDias } from '@/lib/format'
 import { sp, cn } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
@@ -15,7 +15,7 @@ const ESTADOS = ['solicitado', 'en_cotizacion', 'aprobado', 'comprado', 'atendid
 export default async function RequerimientosPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
-  const { page, size, from, to } = paginar(params)
+  const { from, to } = paginar(params)
   const estado = sp(params, 'estado'), vista = sp(params, 'vista', 'todos')
   // Dos requerimientos que no se mezclan: el de los jefes de área y el del almacén (su lista para reponer stock).
   // El almacén ve solo los suyos; el jefe de área, los de áreas; Logística, cada uno en su pestaña.
@@ -29,7 +29,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   if (panel === 'almacen' && sel.id) q = q.eq('almacen_id', sel.id)   // el almacén elegido arriba
   if (estado) q = q.eq('estado', estado)
   else if (vista === 'pendientes') q = q.in('estado', ['solicitado', 'en_cotizacion', 'aprobado'])
-  let k = supabase.from('v_requerimiento_resumen').select('dentro_objetivo').not('aprobado_at', 'is', null).gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString())
+  let k = supabase.from('v_requerimiento_resumen').select('dentro_objetivo').not('aprobado_at', 'is', null).gte('created_at', haceDias(90))
   if (local) k = k.eq('local_id', local.id)
   k = k.eq('origen', origen)
   // por aprobar en cada pestaña (Logística)
@@ -57,11 +57,11 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
       <PageHeader title="Requerimientos"
         actions={puedeCrear ? <LinkButton href="/requerimientos/nuevo"><Plus className="size-4" /> Nuevo requerimiento</LinkButton> : undefined} />
       {esLogistica && (
-        <nav className="mb-5 flex flex-wrap gap-1 rounded-xl border border-line bg-white p-1">
+        <nav aria-label="Origen del requerimiento" className="mb-5 flex flex-wrap gap-1 border-b border-line">
           {tabs.map((t) => (
-            <Link key={t.id} href={`/requerimientos?origen=${t.id}`}
-              className={cn('flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold', t.id === origen ? 'bg-ink-900 text-white' : 'text-muted hover:bg-canvas hover:text-ink-900')}>
-              {t.nombre}{t.n > 0 && <span className={cn('rounded-full px-1.5 text-[11px] tabular', t.id === origen ? 'bg-white/20' : 'bg-brand-50 text-brand-700')}>{t.n}</span>}
+            <Link key={t.id} href={`/requerimientos?origen=${t.id}`} aria-current={t.id === origen ? 'page' : undefined}
+              className={cn('-mb-px flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm transition-colors', t.id === origen ? 'border-brand-600 font-bold text-ink-900' : 'border-transparent font-semibold text-muted hover:border-line-strong hover:text-ink-900')}>
+              {t.nombre}{t.n > 0 && <span className="rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-800 tabular" title="Por aprobar">{t.n}</span>}
             </Link>
           ))}
         </nav>
@@ -80,7 +80,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
                 {!delAlmacen && <><Th>Solicitante</Th><Th>Prioridad</Th></>}<Th right>Ítems</Th>{!delAlmacen && <Th right>Estimado</Th>}<Th>Aprobación</Th><Th>Estado</Th></tr></thead>
               <tbody>{(data as Row[]).map((r) => (
                 <tr key={r.id} className="hover:bg-canvas/60">
-                  <Td><Link href={`/requerimientos/${r.id}`} className="font-semibold text-brand-600">{r.numero}</Link></Td>
+                  <Td><Link href={`/requerimientos/${r.id}`} className="enlace">{r.numero}</Link></Td>
                   <Td className="whitespace-nowrap tabular">{fmtDate(r.created_at, true)}{r.fecha_requerida && <span className="block text-xs text-muted">Para {fmtDate(r.fecha_requerida)}</span>}</Td>
                   <Td><LocalBadge codigo={r.local_codigo} /><span className="block text-xs text-muted">{(delAlmacen ? r.almacen_nombre : r.area_nombre) ?? '—'}</span></Td>
                   {!delAlmacen && <><Td>{r.solicitante}</Td><Td><EstadoBadge estado={r.prioridad} /></Td></>}

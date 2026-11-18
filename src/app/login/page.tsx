@@ -26,6 +26,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="mt-1 text-sm text-muted">Restaurante Las Flores · Hotel Umaru</p>
         </div>
 
+        {error === 'otro-sistema' && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Este usuario trabaja en el sistema de conteos y producción, no en Logística.
+          </p>
+        )}
         {error === 'perfil' && (
           <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             Su cuenta no tiene un perfil asignado en el sistema. Solicite el acceso al administrador.

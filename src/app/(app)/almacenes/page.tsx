@@ -5,7 +5,7 @@ import { getAmbito } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
-import { PageHeader, Section, Stat, Table, Th, Td, FilterBar, FilterField, EmptyState } from '@/components/ui'
+import { PageHeader, Section, Stat, Table, Th, Td, FilterBar, FiltroFechas, EmptyState } from '@/components/ui'
 import { BarList } from '@/components/charts'
 import { PALETTE } from '@/lib/palette'
 
@@ -18,11 +18,10 @@ export const metadata = { title: 'Resumen de almacenes' }
  * Los vencimientos no van aquí: son de cada almacén (su campanita y su página de vencimientos).
  */
 export default async function ResumenAlmacenesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const params = await searchParams
-  const { local } = await getAmbito()
-  const supabase = await createClient()
+  // la sesión y los almacenes al mismo tiempo (los almacenes no esperan a la sesión: se filtran después)
+  const [params, { local }, supabase, todos] = await Promise.all([searchParams, getAmbito(), createClient(), getAlmacenes(null, ['almacen'])])
   const desde = sp(params, 'desde', `${hoyLima().slice(0, 7)}-01`), hasta = sp(params, 'hasta', hoyLima())
-  const almacenes = [...await getAlmacenes(local?.id, ['almacen'])].sort((a, b) => a.nombre.localeCompare(b.nombre))   // 01, 02, Umaru
+  const almacenes = todos.filter((a) => !local || a.local_id === local.id).sort((a, b) => a.nombre.localeCompare(b.nombre))   // 01, 02, Umaru
   const ids = almacenes.map((a) => a.id)
 
   const [stockR, movsR, ingresosR, traspasosR] = await Promise.all([
@@ -91,8 +90,7 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
       <PageHeader title="Resumen de almacenes"
         description="Lo que importa de cada almacén para supervisar: valor, stock mínimo, consumo por área y mermas. Cada movimiento en detalle está en el Kardex." />
       <FilterBar>
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
@@ -160,7 +158,7 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
             <tbody>{ingresos.map((i) => (
               <tr key={i.id}>
                 <Td className="whitespace-nowrap tabular">{fmtDate(i.fecha_ingreso)}</Td>
-                <Td><Link href={`/compras/${i.compra_id}`} className="font-semibold text-brand-600">{i.numero}</Link></Td>
+                <Td><Link href={`/compras/${i.compra_id}`} className="enlace">{i.numero}</Link></Td>
                 <Td className="text-xs">{i.almacen}</Td><Td className="text-sm">{i.proveedor ?? '—'}</Td><Td className="font-medium">{i.producto}</Td>
                 <Td right className="text-muted">{fmtSoles(i.precio_orden)}</Td>
                 <Td right className={Number(i.precio_unitario) > Number(i.precio_orden) ? 'font-semibold text-brand-700' : 'font-semibold text-leaf-600'}>{fmtSoles(i.precio_unitario)}</Td>

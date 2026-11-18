@@ -1,9 +1,9 @@
 'use client'
 
-import { Children, useEffect, useState } from 'react'
+import { Children, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
-import { TAMANOS_PAGINA, TAMANO_DEFECTO } from '@/lib/paginacion'
+import { TAMANOS_PAGINA, TAMANO_DEFECTO, paginar } from '@/lib/paginacion'
 import { Select } from '@/components/select'
 
 /* ───────────── Barra de paginación (presentación) ───────────── */
@@ -39,8 +39,8 @@ export function UrlPagination({ total, prefijo = '' }: { total: number; prefijo?
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
-  const size = Number(sp.get(prefijo + 'size')) || TAMANO_DEFECTO
-  const page = Math.max(1, Number(sp.get(prefijo + 'page')) || 1)
+  // la misma regla que el servidor (página entera ≥ 1, tamaño de la lista): la barra muestra lo que realmente se consultó
+  const { page, size } = paginar(Object.fromEntries(sp.entries()), prefijo)
   const ir = (p: number, s = size) => {
     const q = new URLSearchParams(sp.toString())
     q.set(prefijo + 'page', String(p))
@@ -60,9 +60,9 @@ export function PagedTable({ head, children, empty, foot, className }: {
 }) {
   const filas = Children.toArray(children)
   const [size, setSize] = useState<number>(TAMANO_DEFECTO)
-  const [page, setPage] = useState(1)
+  const [pagina, setPage] = useState(1)
   const pages = Math.max(1, Math.ceil(filas.length / size))
-  useEffect(() => { if (page > pages) setPage(pages) }, [page, pages])
+  const page = Math.min(pagina, pages)   // si la lista se achica, se queda en la última página que existe
   const visibles = filas.slice((page - 1) * size, page * size)
   return (
     <div className={className}>

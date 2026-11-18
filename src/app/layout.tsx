@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
+import { SeleccionarNumeros } from '@/components/seleccionar-numeros'
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' })
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-jb', display: 'swap' })
@@ -18,6 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-dvh font-sans">
         {children}
         <Toaster position="top-right" richColors closeButton />
+        {/* al entrar a un campo de número se selecciona lo escrito (en todo el sistema) */}
+        <SeleccionarNumeros />
       </body>
     </html>
   )

@@ -15,14 +15,24 @@ export type Uni = { id: string; codigo: string; nombre: string; tipo: string; ba
 /** lo que hace falta del producto para convertir */
 export type ProdUnidad = { unidad_id?: string | null; unidad: string; contenido?: string | number | null; contenido_unidad_id?: string | null }
 
+/** las unidades activas, por id (se leen una sola vez para toda la pantalla) */
+async function leerUnidades(): Promise<Record<string, Uni>> {
+  const { data } = await createClient().from('unidad_medida').select('id, codigo, nombre, tipo, base_id, base_factor, orden').eq('activo', true)
+  return Object.fromEntries(((data ?? []) as Uni[]).map((x) => [x.id, x]))
+}
 let cache: Promise<Record<string, Uni>> | null = null
 /** todas las unidades (una sola consulta para toda la pantalla) */
 export function useUnidades() {
   const [u, setU] = useState<Record<string, Uni>>({})
   useEffect(() => {
-    cache ??= Promise.resolve(createClient().from('unidad_medida').select('id, codigo, nombre, tipo, base_id, base_factor, orden').eq('activo', true))
-      .then(({ data }) => Object.fromEntries(((data ?? []) as Uni[]).map((x) => [x.id, x])))
-    cache.then(setU)
+    let vigente = true
+    const cargar = async () => {
+      cache ??= leerUnidades()
+      const unidades = await cache
+      if (vigente) setU(unidades)
+    }
+    void cargar()
+    return () => { vigente = false }
   }, [])
   return u
 }

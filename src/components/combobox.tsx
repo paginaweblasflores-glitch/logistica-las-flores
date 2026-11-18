@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useId } from 'react'
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useCerrarFuera } from '@/lib/use-cerrar-fuera'
 
 export type ComboOpcion = { id: string; nombre: string }
 /** listas a las que se puede agregar una opción escribiéndola (queda para la próxima vez) */
@@ -70,14 +71,20 @@ export function Combobox({ name, options: inicial, defaultValue, value, onChange
     return () => { window.removeEventListener('scroll', mover, true); window.removeEventListener('resize', mover) }
   }, [open])
   const listRef = useRef<HTMLUListElement>(null)
+  const listaId = useId()
 
-  // si cambia lo elegido desde afuera (controlado), se muestra su nombre
-  useEffect(() => { if (!buscando) setTexto(elegida?.nombre ?? '') }, [elegida?.nombre]) // eslint-disable-line react-hooks/exhaustive-deps
+  // si cambia lo elegido desde afuera (controlado), se muestra su nombre (ajuste en el render, sin efecto)
+  const [nombrePrevio, setNombrePrevio] = useState(elegida?.nombre)
+  if (elegida?.nombre !== nombrePrevio) {
+    setNombrePrevio(elegida?.nombre)
+    if (!buscando) setTexto(elegida?.nombre ?? '')
+  }
 
   const t = norm(texto)
   const vaciable = !required && placeholder !== undefined && !libre
   const filtradas = buscando && t
-    ? opciones.filter((o) => norm(o.nombre).includes(t)).sort((a, b) => Number(!norm(b.nombre).startsWith(t)) - Number(!norm(a.nombre).startsWith(t)))
+    // primero las que EMPIEZAN con lo escrito (PAPA AMARILLA antes que CAMOTE PAPA); dentro de cada grupo, el orden de la lista
+    ? opciones.filter((o) => norm(o.nombre).includes(t)).sort((a, b) => Number(!norm(a.nombre).startsWith(t)) - Number(!norm(b.nombre).startsWith(t)))
     : opciones
   const lista: (ComboOpcion & { vacio?: boolean })[] = [...(vaciable && !(buscando && t) ? [{ id: '', nombre: placeholder!, vacio: true }] : []), ...filtradas]
   const exacta = opciones.find((o) => norm(o.nombre) === t)
@@ -108,13 +115,21 @@ export function Combobox({ name, options: inicial, defaultValue, value, onChange
     else setTexto(elegida?.nombre ?? '')
   }
 
-  useEffect(() => {
-    if (!open) return
-    const fuera = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) cerrar() }
-    document.addEventListener('mousedown', fuera)
-    return () => document.removeEventListener('mousedown', fuera)
-  })
+  useCerrarFuera(boxRef, open, cerrar)
   useEffect(() => { if (open) listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: 'nearest' }) }, [active, open])
+
+  // al limpiar el formulario (resetOnSuccess / form.reset()), la lista vuelve a su valor inicial como los campos nativos
+  useEffect(() => {
+    const form = boxRef.current?.closest('form')
+    if (!form || value !== undefined) return
+    const reiniciar = () => {
+      const inicial = defaultValue ?? ''
+      setInterno(inicial); setBuscando(false); setOpen(false); setError('')
+      setTexto(libre ? inicial : opciones.find((o) => o.id === inicial)?.nombre ?? '')
+    }
+    form.addEventListener('reset', reiniciar)
+    return () => form.removeEventListener('reset', reiniciar)
+  })
 
   // los anchos (w-44, min-w-56…) van al contenedor; el resto (alto, etc.) al campo
   const clases = (className ?? '').split(/\s+/).filter(Boolean)
@@ -126,7 +141,7 @@ export function Combobox({ name, options: inicial, defaultValue, value, onChange
       {/* autoComplete off: que el navegador no «recuerde» un valor viejo al recargar */}
       {name && <input type="hidden" name={name} value={actual} autoComplete="off" />}
       <input id={id ?? name} value={texto} disabled={disabled || guardando} required={required && !actual} autoFocus={autoFocus}
-        role="combobox" aria-expanded={open} aria-autocomplete="list" aria-label={ariaLabel} autoComplete="off"
+        role="combobox" aria-expanded={open} aria-controls={listaId} aria-autocomplete="list" aria-label={ariaLabel} autoComplete="off"
         placeholder={placeholder && placeholder !== '—' ? placeholder : 'Elija o escriba…'}
         className={cn('field w-full pr-8', resto)}
         onFocus={(e) => { e.target.select(); setOpen(true); setActive(0) }}
@@ -150,7 +165,7 @@ export function Combobox({ name, options: inicial, defaultValue, value, onChange
 
       {open && !disabled && (
         // el clic en una opción no debe «activar» el <label> que envuelve al campo (volvería a abrir la lista)
-        <ul ref={listRef} role="listbox" onClick={(e) => e.preventDefault()}
+        <ul ref={listRef} id={listaId} role="listbox" onClick={(e) => e.preventDefault()}
           style={pos ? { position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, minWidth: pos.width } : undefined}
           className={cn('absolute z-[60] mt-1 max-h-60 w-max max-w-[20rem] overflow-auto rounded-lg border border-line bg-white py-1 text-left shadow-xl', !pos && 'min-w-full')}>
           {lista.map((o, k) => (

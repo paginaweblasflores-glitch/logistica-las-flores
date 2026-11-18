@@ -1,4 +1,4 @@
-import { AvisoStockDia } from '@/components/aviso-stock-dia'
+import { AvisoStockDia, estadoStockDia } from '@/components/aviso-stock-dia'
 import { getAlmacenes } from '@/lib/queries'
 import { ElegirAlmacen } from '@/components/elegir-almacen'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
@@ -8,14 +8,18 @@ import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { TrasladoLineas } from './lineas'
 import { enviarTraspaso } from '../actions'
+import { ahoraLima } from '@/lib/format'
 
 export const metadata = { title: 'Nuevo traspaso' }
 
 export default async function NuevoTrasladoPage() {
+  void estadoStockDia()   // precarga: el aviso del stock del día se consulta junto con lo demás
   const { local } = await getAmbito()
   // traspasos entre almacenes: el otro almacén del mismo negocio (interno) o el almacén del otro negocio
-  const [origenes, todos] = await Promise.all([getAlmacenes(local?.id, ['almacen']), getAlmacenes(null, ['almacen'])])
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
+  // una sola consulta: todos los almacenes; los de origen son los del negocio elegido
+  const todos = await getAlmacenes(null, ['almacen'])
+  const origenes = local?.id ? todos.filter((a) => a.local_id === local.id) : todos
+  const ahora = ahoraLima()
   const sel = await getAlmacenActivo()   // sale del almacén elegido arriba; puede ir al otro almacén (traspaso interno) o al otro negocio
   if (soloConsulta(sel)) return <ElegirAlmacen titulo="Nuevo traspaso" volver={{ href: '/traslados', label: 'Traspasos' }} />
   return (

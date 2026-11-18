@@ -130,7 +130,7 @@ function Bloqueado({ texto, href }: { texto: string; href: string }) {
       <PageHeader title="Nueva compra" back={{ href: '/compras', label: 'Compras' }} />
       <div className="card flex flex-col items-start gap-3 p-6">
         <p className="text-sm">{texto}</p>
-        <a href={href} className="text-sm font-semibold text-brand-600">Ver documento →</a>
+        <a href={href} className="text-sm enlace">Ver documento →</a>
       </div>
     </>
   )

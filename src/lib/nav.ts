@@ -1,6 +1,6 @@
 import {
-  LayoutDashboard, Boxes, ClipboardCheck, Drumstick, ShoppingCart, BadgeMinus, BarChart3, Settings,
-  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, Truck, CalendarCheck, Beef, type LucideIcon,
+  LayoutDashboard, Boxes, ShoppingCart, BarChart3, Settings,
+  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, type LucideIcon,
 } from 'lucide-react'
 import type { Panel } from '@/lib/panel'
 
@@ -39,16 +39,6 @@ export const NAV: NavModule[] = [
       { href: '/inventario/lotes', label: 'Vencimientos' },
     ],
   },
-  { label: 'Conteos físicos', icon: ClipboardCheck, href: '/conteos' },
-  {
-    label: 'Controles', icon: Drumstick,
-    items: [
-      { href: '/produccion/reportes', label: 'Producción (carnes)' },
-      { href: '/bebidas', label: 'Bebidas oficinas' },
-      { href: '/utensilios', label: 'Utensilios y roturas' },
-    ],
-  },
-  { label: 'Descuentos', icon: BadgeMinus, href: '/descuentos' },
   { label: 'Reportes', icon: BarChart3, href: '/reportes' },
   { label: 'Configuración', icon: Settings, href: '/configuracion' },
 ]
@@ -56,20 +46,22 @@ export const NAV: NavModule[] = [
 /** Menú del panel de ALMACÉN (un negocio): registra el día a día; Logística lo consulta. */
 export const NAV_ALMACEN: NavModule[] = [
   { label: 'Panel del almacén', icon: LayoutDashboard, href: '/' },
+  // en el orden de uso: lo que se registra a diario arriba; el catálogo, una vez cargado, se toca poco.
+  // Entradas, salidas y traspasos: cada uno con su formulario, su historial y su numeración (E-00001 / S-00001)
+  { label: 'Entradas', icon: ArrowDownToLine, href: '/entradas' },
+  { label: 'Salidas', icon: ArrowUpFromLine, href: '/salidas' },
+  { label: 'Traspasos', icon: ArrowLeftRight, href: '/traslados' },
   {
     label: 'Inventario', icon: Boxes,
     items: [
-      { href: '/inventario', label: 'Stock' },
+      { href: '/inventario', label: 'Stock actual' },
       // el Kardex de cada producto se abre desde su fila en Stock o desde su ficha (la lista general repetía Entradas/Salidas)
       { href: '/inventario/lotes', label: 'Vencimientos' },
     ],
   },
-  // cada uno con su formulario, su historial y su numeración (E-00001 / S-00001)
-  { label: 'Entradas', icon: ArrowDownToLine, href: '/entradas' },
-  { label: 'Salidas', icon: ArrowUpFromLine, href: '/salidas' },
-  { label: 'Traspasos', icon: ArrowLeftRight, href: '/traslados' },
   { label: 'Requerimientos', icon: ClipboardList, href: '/requerimientos' },
-  { label: 'Productos', icon: Package, href: '/productos' },
+  // la ficha de cada producto (nombre, unidad, código, mínimo, foto); las cantidades están en Inventario
+  { label: 'Catálogo', icon: Package, href: '/productos' },
   { label: 'Reportes', icon: BarChart3, href: '/reportes' },
 ]
 
@@ -79,33 +71,21 @@ export const NAV_AREA: NavModule[] = [
   { label: 'Requerimientos enviados', icon: ClipboardList, href: '/requerimientos' },
 ]
 
-/** Menú del panel de PRODUCCIÓN: todo lo registra el área; Logística solo ve sus reportes. */
-export const NAV_PRODUCCION: NavModule[] = [
-  { label: 'Panel de producción', icon: LayoutDashboard, href: '/produccion' },
-  { label: 'Venta del día', icon: ClipboardList, href: '/produccion/venta' },
-  { label: 'Kardex de carnes', icon: Beef, href: '/produccion/kardex' },
-  { label: 'Ingresos de proveedores', icon: Truck, href: '/produccion/ingresos' },
-  { label: 'Diagrama de producción', icon: CalendarCheck, href: '/produccion/diagrama' },
-  { label: 'Productos y proveedores', icon: Package, href: '/produccion/productos' },
-  { label: 'Reportes', icon: BarChart3, href: '/produccion/reportes' },
-]
-
-export const navDe = (panel: Panel) => (panel === 'almacen' ? NAV_ALMACEN : panel === 'area' ? NAV_AREA : panel === 'produccion' ? NAV_PRODUCCION : NAV)
+export const navDe = (panel: Panel) => (panel === 'almacen' ? NAV_ALMACEN : panel === 'area' ? NAV_AREA : NAV)
 
 /** ¿La ruta actual corresponde a este enlace? (incluye sus fichas de detalle: /compras/123) */
 export function rutaActiva(pathname: string, href: string) {
-  if (href === '/' || href === '/inventario' || href === '/almacenes' || href === '/produccion') return pathname === href
+  if (href === '/' || href === '/inventario' || href === '/almacenes') return pathname === href
   return pathname === href || pathname.startsWith(href + '/')
 }
 
 /**
  * Pantallas donde el selector Global / Restaurante / Hotel realmente filtra la información.
  * En el resto (fichas de detalle, formularios, maestros, configuración) se oculta para no confundir.
- * Carnes y viandas tiene sus propias pestañas de negocio.
  */
 export const RUTAS_CON_AMBITO = new Set([
   '/', '/inventario', '/inventario/kardex', '/inventario/movimientos', '/inventario/lotes', '/entradas', '/salidas', '/almacenes',
-  '/conteos', '/traslados', '/bebidas', '/utensilios',
+  '/traslados',
   '/requerimientos', '/cotizaciones', '/compras', '/transporte', '/ingresos',
-  '/descuentos', '/reportes', '/productos',
+  '/reportes', '/productos',
 ])

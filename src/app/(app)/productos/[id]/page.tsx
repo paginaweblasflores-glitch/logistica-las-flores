@@ -1,14 +1,14 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Image as ImageIcon, Package, Warehouse, ShieldAlert } from 'lucide-react'
+import { Image as ImageIcon, Package, Warehouse, ShieldAlert, PackagePlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAlmacenes, getCategorias, getUnidades } from '@/lib/queries'
 import { getMisLocales, getPanel, getAlmacenActivo, getLocales, soloConsulta } from '@/lib/session'
-import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
-import { PageHeader, Section, Stat, LinkButton } from '@/components/ui'
+import { fmtQty } from '@/lib/format'
+import { PageHeader, Section, LinkButton } from '@/components/ui'
 import { ProductoForm, type Producto } from '../form'
 import { ParametrosAlmacen } from './parametros'
 import { FotoProducto } from './foto'
+import { StockInicial } from './stock-inicial'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { Badge } from '@/components/ui'
@@ -32,11 +32,7 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
     supabase.rpc('fn_producto_tiene_historial', { p_producto: id }),
   ])
   if (!p) notFound()
-  // último precio y rango: las compras de este producto y de su copia en el otro negocio (misma unidad)
-  const { data: est } = await supabase.from('v_precio_estadistica').select('precio_actual, precio_min, precio_max, compras, ultima_compra')
-    .eq('maestro_id', p.maestro_id).eq('unidad_id', p.unidad_id).maybeSingle()
   const st = (stock ?? []) as { almacen_id: string; cantidad: number; costo_promedio: number; valor: number }[]
-  const total = st.reduce((s, x) => s + Number(x.cantidad), 0)
   const params_ = new Map((pa ?? []).map((x) => [x.almacen_id, x]))
   const almacen = panel === 'almacen'
   const misIds = new Set(locales.map((l) => l.id))
@@ -51,38 +47,28 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
   const stockMio = st.filter((x) => almacenes.some((a) => a.id === x.almacen_id && misIds.has(String(a.local_id)))).reduce((s, x) => s + Number(x.cantidad), 0)
   // Almacenes del responsable y en cuáles está el producto (Almacén 01 / Almacén 02 — Cocina)
   const enAlmacen = new Set((pa ?? []).map((x) => x.almacen_id))
+  const stockInicialPendiente = editable && !!sel.id && enAlmacen.has(sel.id) && !st.some((x) => x.almacen_id === sel.id)
   // Cada almacén ve y ajusta los parámetros de los almacenes donde está el producto
   const filas = almacenes.filter((a) => !almacen || (misIds.has(String(a.local_id)) && enAlmacen.has(a.id) && sel.lista.some((x) => x.id === a.id))).map((a) => {
     const x = params_.get(a.id), s = st.find((y) => y.almacen_id === a.id)
-    return { almacen_id: a.id, nombre: a.nombre, oficina: a.tipo === 'oficina', stock: s ? Number(s.cantidad) : null, stock_minimo: x?.stock_minimo?.toString() ?? '', stock_maximo: x?.stock_maximo?.toString() ?? '', stock_objetivo: x?.stock_objetivo?.toString() ?? '', ubicacion: x?.ubicacion ?? '',
+    return { almacen_id: a.id, nombre: a.nombre, stock: s ? Number(s.cantidad) : null, stock_minimo: x?.stock_minimo?.toString() ?? '', stock_maximo: x?.stock_maximo?.toString() ?? '', stock_objetivo: x?.stock_objetivo?.toString() ?? '', ubicacion: x?.ubicacion ?? '',
       fecha_vencimiento: x?.fecha_vencimiento ?? '', dias_aviso_vencimiento: String(x?.dias_aviso_vencimiento ?? 30) }
   })
 
   return (
     <>
-      <PageHeader title={p.nombre} back={{ href: '/productos', label: 'Productos' }} description={almacen
-          // códigos: el de cada almacén (lo que ve el responsable) y el de la maestra del negocio
-          ? [...sel.lista.filter((a) => enAlmacen.has(a.id)).map((a) => `Código ${(pa ?? []).find((x) => x.almacen_id === a.id)?.codigo ?? '—'} en ${a.corto}`),
-             sel.lista.length > 1 && pl?.find((x) => misIds.has(x.local_id))?.codigo ? `maestra ${pl.find((x) => misIds.has(x.local_id))!.codigo}` : null]
-              .filter(Boolean).join(' · ') || 'No está en su almacén'
+      <PageHeader title={p.nombre} back={{ href: '/productos', label: 'Catálogo' }} description={almacen
+          // el código de cada almacén donde está (lo que usa el responsable)
+          ? sel.lista.filter((a) => enAlmacen.has(a.id)).map((a) => `Código ${(pa ?? []).find((x) => x.almacen_id === a.id)?.codigo ?? '—'} · ${a.corto}`).join('  ·  ')
+              || 'No está en su almacén'
           : p.codigo}
         actions={<>{!p.activo && <Badge tone="gray">De baja</Badge>}<LinkButton href={`/inventario/kardex?producto=${id}`} variant="outline">Kardex</LinkButton><LinkButton href={`/precios?producto=${id}`} variant="outline">Precios</LinkButton></>} />
-      <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Stock total" value={fmtQty(total)} hint={`${st.filter((x) => Number(x.cantidad) !== 0).length} almacenes`} />
-        <Stat label="Valor" value={fmtSoles(st.reduce((s, x) => s + Number(x.valor), 0))} />
-        <Stat label={est ? 'Último precio de compra' : 'Precio inicial'} value={fmtSoles(est?.precio_actual ?? p.costo_referencia)} hint={est ? `${fmtDate(est.ultima_compra)} · ${est.compras} ${est.compras === 1 ? 'compra' : 'compras'} · lo actualiza cada boleta` : 'Aún sin compras: la primera boleta lo actualiza'} />
-        <Stat label="Rango de precio" value={est ? `${fmtSoles(est.precio_min)} – ${fmtSoles(est.precio_max)}` : '—'} />
-      </div>
       <div className="mb-5 grid gap-5 lg:grid-cols-[1fr_240px]">
         <Section icon={Package} title="Datos del producto">
           <ProductoForm p={p as Producto} categorias={categorias} unidades={[...unidades.map((u) => ({ id: u.id, nombre: u.nombre, productos: u.productos, tipo: u.tipo })),
               // «Por definir» ya no se elige, pero se muestra en los productos que aún la tienen
               ...(unidades.some((u) => u.id === p.unidad_id) ? [] : [{ id: p.unidad_id, nombre: 'Por definir', productos: 0 }])]}
-            negocios={locales} seleccionados={(pl ?? []).map((x) => x.local_id)} soloLectura={!editable}
-            // cantidad del almacén elegido: se pone una sola vez (null = aún no tiene)
-            almacenId={editable && sel.id && enAlmacen.has(sel.id) ? sel.id : null}
-            cantidadActual={editable && sel.id && enAlmacen.has(sel.id) ? (st.some((x) => x.almacen_id === sel.id) ? Number(st.find((x) => x.almacen_id === sel.id)!.cantidad) : null) : undefined}
-/>
+            negocios={locales} seleccionados={(pl ?? []).map((x) => x.local_id)} soloLectura={!editable} />
           {!almacen && <p className="mt-3 text-xs text-muted">Solo consulta: el catálogo lo administra el responsable de cada almacén.</p>}
           {almacen && soloConsulta(sel) && <p className="mt-3 text-xs text-muted">Vista de todos sus almacenes: para editar el producto o poner su cantidad, elija arriba el almacén.</p>}
           {almacen && compartido && <p className="mt-3 text-xs text-muted">También lo usa <b>{otros}</b>: si cambia nombre, unidad, categoría o foto, el cambio se ve en los dos negocios. El stock y el mínimo son de cada almacén.</p>}
@@ -93,7 +79,13 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
             : <p className="text-sm text-muted">Sin foto.</p>}
         </Section>
       </div>
-      <Section icon={Warehouse} title="Stock y parámetros por almacén">
+      {/* el stock inicial, una sola vez en el almacén elegido; después cambia con entradas, salidas y traspasos */}
+      {stockInicialPendiente && (
+        <Section icon={PackagePlus} title="Stock inicial" className="mb-5">
+          <StockInicial productoId={id} almacenId={sel.id!} almacen={sel.actual?.corto ?? 'este almacén'} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''} />
+        </Section>
+      )}
+      <Section icon={Warehouse} title="Parámetros del almacén">
         <ParametrosAlmacen productoId={id} filas={filas} soloLectura={!almacen} vencimiento={almacen} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''} />
       </Section>
       {editable && (

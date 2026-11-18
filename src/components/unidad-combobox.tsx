@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useId } from 'react'
 import { ChevronDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useCerrarFuera } from '@/lib/use-cerrar-fuera'
 
 /** tipo: «medida» (unidad, kilo, litro…) o «empaque» (saco, caja…: se indica cuánto trae) */
 export type UnidadOpc = { id: string; nombre: string; productos: number; tipo?: string }
@@ -39,6 +40,7 @@ export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: {
   const [active, setActive] = useState(0)
   const boxRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
+  const listaId = useId()
 
   const alfabetico = useMemo(() => [...unidades].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [unidades])
   const usadas = useMemo(() => [...unidades].filter((u) => u.productos > 0).sort((a, b) => b.productos - a.productos).slice(0, MAS_USADAS), [unidades])
@@ -71,11 +73,8 @@ export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: {
     else { setSel(null); setBuscando(false) }
   }
 
-  useEffect(() => {
-    const fuera = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) cerrar() }
-    document.addEventListener('mousedown', fuera)
-    return () => document.removeEventListener('mousedown', fuera)
-  })
+  // al salir de la lista (abierta o escribiendo) se resuelve lo escrito
+  useCerrarFuera(boxRef, open || buscando, cerrar)
   useEffect(() => { listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: 'nearest' }) }, [active])
 
   let i = -1
@@ -83,7 +82,7 @@ export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: {
     <div ref={boxRef} className="relative">
       <input type="hidden" name="unidad" value={sel ? sel.id : esNueva ? 'otra' : ''} />
       {!sel && esNueva && <input type="hidden" name="unidad_nueva" value={texto.trim()} />}
-      <input value={texto} disabled={disabled} required aria-label="Unidad" role="combobox" aria-expanded={open} aria-autocomplete="list"
+      <input value={texto} disabled={disabled} required aria-label="Unidad" role="combobox" aria-expanded={open} aria-controls={listaId} aria-autocomplete="list"
         placeholder="Elija o escriba…" autoComplete="off" className="field pr-8"
         onFocus={(e) => { e.target.select(); setOpen(true); setActive(0) }}
         onClick={() => setOpen(true)}
@@ -101,7 +100,7 @@ export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: {
       {esNueva && !open && <p className="mt-1 text-xs text-leaf-600">Unidad nueva: se guardará para la próxima vez.</p>}
 
       {open && !disabled && (
-        <ul ref={listRef} role="listbox" className="absolute z-50 mt-1 max-h-60 w-max max-w-[20rem] min-w-full overflow-auto rounded-lg border border-line bg-white py-1 shadow-xl">
+        <ul ref={listRef} id={listaId} role="listbox" className="absolute z-50 mt-1 max-h-60 w-max max-w-[20rem] min-w-full overflow-auto rounded-lg border border-line bg-white py-1 shadow-xl">
           {grupos.map((g) => g.items.length > 0 && (
             <li key={g.titulo ?? 'r'} role="presentation">
               {g.titulo && <p className="px-3 pt-1.5 pb-0.5 text-[10.5px] font-bold tracking-wide text-subtle uppercase">{g.titulo}</p>}

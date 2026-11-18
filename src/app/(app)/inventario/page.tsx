@@ -23,7 +23,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const params = await searchParams
   // sesión (una sola llamada cacheada): negocio, panel y almacén elegido arriba
   const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
-  const { page, size, from, to } = paginar(params)
+  const { from, to } = paginar(params)
   const q = sp(params, 'q'), almacen = sp(params, 'almacen') || sel.id || '', estado = sp(params, 'estado'), tipo = sp(params, 'tipo')
   // «mostrar»: por defecto todos (también los agotados); el nombre viejo «con_stock» ya no se usa (direcciones guardadas)
   const mostrar = sp(params, 'mostrar', 'todos')
@@ -59,7 +59,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <PageHeader title="Stock por almacén" />
 
       {alerta && !estado && (
-        <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto. <Link href="/inventario" className="font-semibold text-brand-600">Ver todo el stock</Link></Note></div>
+        <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto (haga clic en su nombre). <Link href="/inventario" className="enlace">Ver todo el stock</Link></Note></div>
       )}
       <FilterBar>
         {alerta && <input type="hidden" name="alerta" value="1" />}
@@ -69,7 +69,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
         <FilterField label="Mostrar"><Select name="mostrar" required options={[{ id: 'todos', nombre: 'Todos' }, { id: 'con_stock', nombre: 'Solo con stock' }]} defaultValue={mostrar} /></FilterField>
       </FilterBar>
-      {conCosto && <p className="-mt-2 mb-3 text-xs text-muted">Costo unit. promedio = promedio de lo que costó cada unidad en todas las compras · Valor total = cantidad × costo promedio. Los precios reales de cada boleta están en <Link href="/precios" className="font-semibold text-brand-600">Trazabilidad de precios</Link>.</p>}
+      {conCosto && <p className="-mt-2 mb-3 text-xs text-muted">Costo unit. promedio = promedio de lo que costó cada unidad en todas las compras · Valor total = cantidad × costo promedio. Los precios reales de cada boleta están en <Link href="/precios" className="enlace">Trazabilidad de precios</Link>.</p>}
 
       <Section icon={Boxes} title="Existencias" bodyClassName="p-0"
         stats={[...(conCosto ? [{ label: 'Valor total', value: fmtSoles(valor) }] : []), { label: 'Registros', value: count ?? 0 }, { label: 'Críticos', value: criticos }]}>
@@ -83,17 +83,18 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                 {(data as Row[]).map((r) => (
                   <tr key={r.producto_id + r.almacen_id} className="hover:bg-canvas/60">
                     <Td>
-                      <span className="flex items-center gap-3">
+                      {/* el nombre abre la ficha del Catálogo: ahí se corrige el nombre, la unidad o el mínimo */}
+                      <Link href={`/productos/${r.producto_id}`} title="Abrir la ficha del producto (Catálogo)" className="group flex items-center gap-3">
                         <ProductoFoto src={r.imagen_url} alt={r.nombre} />
                         <span className="min-w-0">
-                          <span className="block font-medium">{r.nombre}</span>
+                          <span className="block font-medium group-hover:text-brand-600 group-hover:underline">{r.nombre}</span>
                           <span className="text-xs text-muted">{panel === 'almacen' ? `Cód. ${r.codigo_almacen ?? '—'}` : r.codigo}{r.categoria ? ` · ${r.categoria}` : ''}</span>
                         </span>
-                      </span>
+                      </Link>
                     </Td>
                     <Td><span className="block">{r.almacen_nombre}</span><LocalBadge codigo={r.local_codigo} /></Td>
                     <Td right className="font-semibold">{fmtQty(r.cantidad)} <span className="text-xs font-normal text-muted">{r.unidad}</span></Td>
-                    <Td right className="text-muted">{r.stock_objetivo ? `par ${fmtQty(r.stock_objetivo)}` : fmtQty(r.stock_minimo)}</Td>
+                    <Td right className="text-muted">{fmtQty(r.stock_minimo)}</Td>
                     {conCosto && <>
                       <Td right>{fmtSoles(r.costo_promedio)}</Td>
                       <Td right className="font-semibold">{fmtSoles(r.valor)}</Td>

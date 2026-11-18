@@ -3,7 +3,7 @@ import { Package, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { getCategorias } from '@/lib/queries'
-import { fmtQty, fmtSoles } from '@/lib/format'
+import { fmtSoles } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, Badge, LocalBadge, Note } from '@/components/ui'
@@ -11,7 +11,7 @@ import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 import { ProductoFoto } from '@/components/producto-foto'
 
-export const metadata = { title: 'Productos' }
+export const metadata = { title: 'Catálogo' }
 
 export default async function ProductosPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
@@ -86,7 +86,8 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
   const [{ data, count }, categorias, { data: resumen }, { count: enEsteAlmacen }, { count: conCantidad }] = await Promise.all([
     listado(),
     getCategorias(),
-    supabase.rpc('fn_resumen_productos'),
+    // el resumen por negocio solo lo usa la vista de Logística
+    almacen ? Promise.resolve({ data: null }) : supabase.rpc('fn_resumen_productos'),
     // cuántos productos del almacén aún no tienen su cantidad puesta (entrada «Producto nuevo»)
     enAlmacen ? supabase.from('producto_almacen').select('producto_id', { count: 'exact', head: true }).eq('almacen_id', sel.id!) : Promise.resolve({ count: 0 }),
     enAlmacen ? supabase.from('stock').select('producto_id', { count: 'exact', head: true }).eq('almacen_id', sel.id!) : Promise.resolve({ count: 0 }),
@@ -97,23 +98,21 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
     categoria: { nombre: string } | null; negocios: { codigo: number | null; local: { codigo: string } }[]; en_almacen?: { codigo: number | null }[]
     st?: { almacen_id: string; cantidad: number }[] }
   const porId = new Map((data as unknown as P[]).map((p) => [p.id, p]))
-  // stock de cada producto: del almacén elegido, o la suma de sus almacenes con «Todos»
-  const stockDe = (prod: string) => (porId.get(prod)?.st ?? []).reduce((x, s) => x + Number(s.cantidad), 0)
-  // en el almacén elegido: si hay fila de stock, el producto ya tiene su cantidad puesta (bloqueada)
-  const tieneStock = new Map(enAlmacen ? (data as unknown as P[]).filter((p) => p.st?.length).map((p) => [p.id, Number(p.st![0].cantidad)]) : [])
+  // el Catálogo no muestra cantidades (eso es Inventario): solo si ya se puso el stock inicial (fila de stock = puesto, bloqueado)
+  const stockInicialListo = (prod: string) => !!porId.get(prod)?.st?.length
 
 
   const res = (resumen ?? []) as { local_codigo: string; local_nombre: string; productos: number }[]
   const sin = Number(res.find((r) => r.local_codigo === 'SIN')?.productos ?? 0)
   const stats = almacen ? [{ label: enAlmacen ? `Productos en ${sel.actual?.corto ?? 'su almacén'}` : 'Productos', value: count ?? 0 },
-    ...(enAlmacen ? [{ label: 'Sin cantidad aún', value: sinCantidad }] : [])] : [
+    ...(enAlmacen ? [{ label: 'Stock inicial pendiente', value: sinCantidad }] : [])] : [
     ...res.filter((r) => r.local_codigo !== 'SIN').map((r) => ({ label: r.local_codigo === 'LF' ? 'Las Flores' : r.local_codigo === 'UM' ? 'Umaru' : r.local_nombre, value: Number(r.productos) })),
     { label: sinNegocio ? 'Sin negocio' : local ? `Lista de ${local.codigo === 'LF' ? 'Las Flores' : 'Umaru'}` : 'Mostrados', value: count ?? 0 },
   ]
 
   return (
     <>
-      <PageHeader title={almacen ? (sel.actual && sel.lista.length > 1 ? `Productos · ${sel.actual.corto}` : 'Productos de mi almacén') : 'Productos'}
+      <PageHeader title={almacen ? (sel.actual && sel.lista.length > 1 ? `Catálogo · ${sel.actual.corto}` : 'Catálogo de mi almacén') : 'Catálogo'}
         description={almacen
           ? consulta
             ? 'Vista de todos sus almacenes (solo consulta). Para registrar productos o cantidades, elija arriba el almacén.'
@@ -121,12 +120,10 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
           : 'Catálogo único de productos. Cada producto se marca en el negocio donde se usa; el stock de cada negocio es independiente.'}
         actions={<>
           <ExportButton filename="productos" table="producto" order="nombre" columns={{ codigo: 'Código', nombre: 'Nombre', marca: 'Marca', costo_referencia: 'Último precio de compra', activo: 'Activo' }} />
-          {/* Almacén 01 y 02 del mismo responsable: separar qué producto es de cada uno (una sola vez) */}
-          {almacen && sel.lista.length > 1 && <LinkButton href="/productos/separar" variant="outline">Separar Almacén 01 / 02</LinkButton>}
           {almacen && !consulta && <LinkButton href="/productos/nuevo"><Plus className="size-4" /> Nuevo producto</LinkButton>}
         </>} />
       {!almacen && sin > 0 && !sinNegocio && (
-        <div className="mb-4"><Note>Hay <b>{sin}</b> producto(s) sin negocio asignado: no aparecen en la lista de ningún negocio. <Link href="/productos?negocio=sin" className="font-semibold text-brand-600">Revisarlos</Link></Note></div>
+        <div className="mb-4"><Note>Hay <b>{sin}</b> producto(s) sin negocio asignado: no aparecen en la lista de ningún negocio. <Link href="/productos?negocio=sin" className="enlace">Revisarlos</Link></Note></div>
       )}
       <FilterBar>
         <FilterField label="Buscar" className="min-w-60"><input name="q" defaultValue={q} placeholder={enAlmacen ? 'Nombre o código' : 'Nombre del producto'} className="field" /></FilterField>
@@ -135,12 +132,12 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
         {sinNegocio && <input type="hidden" name="negocio" value="sin" />}
         {unidadFiltro && <input type="hidden" name="unidad" value={unidadFiltro} />}
       </FilterBar>
-      <Section icon={Package} title={sinNegocio ? 'Productos sin negocio asignado' : 'Catálogo'} bodyClassName="p-0" stats={stats}
-        actions={sinNegocio ? <Link href="/productos" className="text-xs font-semibold text-brand-600">Ver todos</Link> : undefined}>
+      <Section icon={Package} title={sinNegocio ? 'Productos sin negocio asignado' : 'Productos'} bodyClassName="p-0" stats={stats}
+        actions={sinNegocio ? <Link href="/productos" className="text-xs enlace">Ver todos</Link> : undefined}>
         {data?.length ? (
           <>
             <Table>
-              <thead><tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}<Th>Categoría</Th><Th>Unidad</Th>{almacen && <Th right>Cantidad</Th>}<Th right>Último precio</Th></tr></thead>
+              <thead><tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}<Th>Categoría</Th><Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr></thead>
               <tbody>{(data as unknown as P[]).map((p) => (
                 <tr key={p.id} className={p.activo ? 'hover:bg-canvas/60' : 'opacity-50'}>
                   {/* en un almacén: SU código; con «Todos»: el de la maestra del negocio */}
@@ -153,9 +150,9 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
                     : <Badge tone="amber">Sin asignar</Badge>}</Td>}
                   <Td className="text-xs">{p.categoria?.nombre ?? '—'}</Td>
                   <Td>{p.unidad.codigo}</Td>
-                  {almacen && <Td right className="tabular">{enAlmacen && !tieneStock.has(p.id)
-                    ? <span className="text-xs text-subtle" title="Póngala en Editar (una sola vez)">Sin cantidad</span>
-                    : <span className={stockDe(p.id) ? 'font-semibold' : 'text-subtle'}>{fmtQty(stockDe(p.id))}</span>}</Td>}
+                  {almacen && <Td>{stockInicialListo(p.id)
+                    ? <Badge tone="green">Listo</Badge>
+                    : <span title="Se pone una sola vez, en la ficha del producto"><Badge tone="amber">Pendiente</Badge></span>}</Td>}
                   <Td right>{fmtSoles(p.costo_referencia)}</Td>
                 </tr>
               ))}</tbody>

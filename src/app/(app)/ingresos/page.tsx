@@ -7,7 +7,7 @@ import { Select } from '@/components/select'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima, inicioMes, MESES_CORTO } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { COLOR_LOCAL } from '@/lib/palette'
-import { PageHeader, Section, Th, Td, FilterBar, FilterField, EmptyState, Stat, LocalBadge, Badge, LinkButton, Note } from '@/components/ui'
+import { PageHeader, Section, Th, Td, FilterBar, FilterField, FiltroFechas, EmptyState, Stat, LocalBadge, Badge, LinkButton, Note } from '@/components/ui'
 import { Bars } from '@/components/charts'
 import { ExportButton } from '@/components/export-button'
 import { PagedTable } from '@/components/pager'
@@ -112,8 +112,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
       {!almacen && <div className="mb-4"><Note>Los ingresos los registra el responsable de cada almacén. Se marcan: <b>precio distinto</b> al de la orden de compra, <b>precio que subió</b> más del {fmtPct(umbral)} frente a la compra anterior, ingresos <b>sin orden de compra</b> y comprobantes cuyo total <b>no cuadra</b> con la suma.</Note></div>}
 
       <FilterBar>
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
         {!sel.lista.length && <FilterField label="Almacén"><Select name="almacen" options={almacenes} defaultValue={almacenId} placeholder="Todos" /></FilterField>}
         <FilterField label="Mostrar"><Select name="alerta" options={ALERTAS} defaultValue={alerta} required /></FilterField>
       </FilterBar>
@@ -136,7 +135,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
               <tr key={r.id} className={conAlerta(r) ? 'bg-amber-50/40' : ''}>
                 <Td className="text-xs tabular whitespace-nowrap">{fmtDate(r.fecha_ingreso)}</Td>
                 <Td><LocalBadge codigo={r.local_codigo} /><span className="block text-xs text-muted">{r.almacen}</span></Td>
-                <Td className="text-xs"><Link href={`/compras/${r.compra_id}`} className="font-semibold text-brand-600">{r.numero}</Link>
+                <Td className="text-xs"><Link href={`/compras/${r.compra_id}`} className="enlace">{r.numero}</Link>
                   <span className="block text-muted capitalize">{r.tipo_documento ?? '—'} {r.numero_documento ?? ''}</span></Td>
                 <Td className="text-xs">{r.proveedor ?? '—'}{r.recibido_por && <span className="block text-muted">Registró {r.recibido_por}</span>}</Td>
                 <Td><span className="font-medium">{r.producto}</span>

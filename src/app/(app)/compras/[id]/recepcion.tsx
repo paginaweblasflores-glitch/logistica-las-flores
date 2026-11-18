@@ -5,7 +5,7 @@ import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { useUnidades, factorUnidad, UnidadCelda } from '@/components/unidad-linea'
 import { Badge } from '@/components/ui'
-import { fmtSoles } from '@/lib/format'
+import { fmtSoles, ahoraLima } from '@/lib/format'
 import { recibirCompra } from '../actions'
 import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
@@ -34,7 +34,7 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
   // el comprobante ya se registró en la compra: no se vuelve a pedir (solo «cambiar» si la boleta trae otro)
   const [cambiarDoc, setCambiarDoc] = useState(!doc?.numero)
   const nombreDoc = COMPROBANTES.find((x) => x.id === (doc?.tipo ?? 'boleta'))?.nombre ?? 'Comprobante'
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
+  const [ahora] = useState(ahoraLima)   // la hora de Lima al abrir el formulario
   const suma = lineas.reduce((s, l) => s + (num(rec[l.id].cant) || 0) * (num(rec[l.id].precio) || 0), 0)
   const incompleta = lineas.some((l) => num(rec[l.id].cant) * fac(l) < l.pedido)
   const conDiferencia = lineas.filter((l) => rec[l.id].precio !== '' && Math.abs(num(rec[l.id].precio) / fac(l) - l.precio) > 0.00005)
@@ -57,7 +57,7 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
           <div className="sm:col-span-2"><span className="label">Comprobante</span>
             <input type="hidden" name="tipo_documento" value={doc?.tipo ?? 'boleta'} /><input type="hidden" name="numero_documento" value={doc?.numero ?? ''} />
             <p className="flex h-10 items-center gap-2 text-sm"><b>{nombreDoc} {doc?.numero}</b>
-              <button type="button" onClick={() => setCambiarDoc(true)} className="text-xs font-semibold text-brand-600 hover:underline">cambiar</button></p>
+              <button type="button" onClick={() => setCambiarDoc(true)} className="enlace text-xs">cambiar</button></p>
           </div>
         )}
         <TotalComprobante suma={suma} onEscrito={setTotalBoleta} />

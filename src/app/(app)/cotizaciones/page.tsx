@@ -3,7 +3,7 @@ import { FileSpreadsheet, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito } from '@/lib/session'
 import { fmtDate, fmtSoles, fmtPct } from '@/lib/format'
-import { PageHeader, Section, Table, Th, Td, EmptyState, LinkButton, EstadoBadge, LocalBadge } from '@/components/ui'
+import { PageHeader, Section, Th, Td, EmptyState, LinkButton, EstadoBadge, LocalBadge } from '@/components/ui'
 import { PagedTable } from '@/components/pager'
 
 export const metadata = { title: 'Cotizaciones' }
@@ -27,7 +27,7 @@ export default async function CotizacionesPage() {
         {rows.length ? (
           <PagedTable head={<tr><Th>N°</Th><Th>Fecha</Th><Th>Negocio</Th><Th>Título</Th><Th>Adjudicado a</Th><Th right>1ª ronda</Th><Th right>Adjudicado</Th><Th right>Ahorro</Th><Th>Estado</Th></tr>}>{rows.map((r) => (
               <tr key={r.id} className="hover:bg-canvas/60">
-                <Td><Link href={`/cotizaciones/${r.id}`} className="font-semibold text-brand-600">{r.numero}</Link></Td>
+                <Td><Link href={`/cotizaciones/${r.id}`} className="enlace">{r.numero}</Link></Td>
                 <Td className="tabular">{fmtDate(r.fecha)}</Td><Td><LocalBadge codigo={r.local_id ? cod.get(r.local_id) : null} /></Td>
                 <Td>{r.titulo}</Td><Td>{r.proveedor_aprobado ?? '—'}</Td>
                 <Td right>{fmtSoles(r.total_primera_ronda)}</Td><Td right className="font-semibold">{fmtSoles(r.total_adjudicado)}</Td>

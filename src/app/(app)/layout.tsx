@@ -1,38 +1,49 @@
+import { Info } from 'lucide-react'
 import { Sidebar } from '@/components/shell/sidebar'
-import { Topbar } from '@/components/shell/topbar'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { getAmbito, getUsuario, getAlmacenActivo } from '@/lib/session'
-import { panelDe, rutaPermitida, inicioDe } from '@/lib/panel'
+import { getAmbito, getUsuario, getAlmacenActivo, soloConsulta } from '@/lib/session'
+import { panelDe, rutaPermitida, inicioDe, esDeOtroSistema } from '@/lib/panel'
 import { etiquetaNegocio } from '@/lib/empresa'
 import { createClient } from '@/lib/supabase/server'
 import type { AlertaStock, AvisoRequerimiento, AvisoVence, Avisos } from '@/components/shell/campana'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
   const [usuario, ambito] = await Promise.all([getUsuario(), getAmbito()])
+  // usuarios de otro sistema (Producción → conteos) no entran a Logística
+  if (esDeOtroSistema(usuario.rol)) redirect('/auth/salir?error=otro-sistema')
   const panel = panelDe(usuario.rol)
   const almacenSel = await getAlmacenActivo()
-  const avisos = panel === 'area' || panel === 'produccion' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
-  // Cada panel abre solo sus pantallas (p. ej. el almacén no entra a Descuentos; Logística no registra salidas)
+  const avisos = panel === 'area' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
+  // Cada panel abre solo sus pantallas (p. ej. el almacén no entra a Cotizaciones; Logística no registra salidas)
   if (!rutaPermitida(panel, (await headers()).get('x-pathname'))) redirect(inicioDe(panel))
-  const fecha = new Date().toLocaleDateString('es-PE', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Lima',
-  })
   return (
     <div className="min-h-dvh">
-      <Sidebar panel={panel} subtitulo={panel === 'almacen' ? `Almacén ${ambito.local?.codigo === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : panel === 'produccion' ? 'Producción' : 'Logística'} />
+      {/* negocio/almacén, avisos y usuario van en la barra lateral: el contenido usa todo el alto */}
+      <Sidebar
+        panel={panel}
+        subtitulo={panel === 'almacen' ? `Almacén ${ambito.local?.codigo === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : 'Logística'}
+        barra={{
+          ambito: ambito.codigo,
+          ambitoFijo: ambito.fijo || panel === 'area',
+          locales: ambito.locales.map((l) => ({ codigo: l.codigo, nombre: l.nombre, titulo: etiquetaNegocio(l) })),
+          almacenes: almacenSel.lista,
+          almacenActivo: almacenSel.lista.length > 1 ? almacenSel.id : null,
+          usuario: { nombre: usuario.nombre, rol: usuario.rol },
+          avisos,
+        }}
+      />
       <div className="lg:pl-56 print:pl-0">
-        <Topbar
-          ambito={ambito.codigo}
-          ambitoFijo={ambito.fijo || panel === 'area' || panel === 'produccion'}
-          locales={ambito.locales.map((l) => ({ codigo: l.codigo, nombre: l.nombre, titulo: etiquetaNegocio(l) }))}
-          usuario={{ nombre: usuario.nombre, rol: usuario.rol }}
-          avisos={avisos}
-          almacenes={almacenSel.lista} almacenActivo={almacenSel.lista.length > 1 ? almacenSel.id : null}
-          fecha={fecha.charAt(0).toUpperCase() + fecha.slice(1)}
-        />
-        <main className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 print:max-w-none print:p-0">{children}</main>
+        <main className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 print:max-w-none print:p-0">
+          {/* con «Todos» el almacén solo consulta: se explica por qué no aparecen los botones para registrar */}
+          {panel === 'almacen' && soloConsulta(almacenSel) && (
+            <p className="no-print mb-5 flex items-center gap-2 rounded-xl border border-line bg-sand px-4 py-2.5 text-sm text-ink-700">
+              <Info className="size-4 shrink-0 text-muted" aria-hidden />
+              Está viendo <b>Todos</b> los almacenes (solo consulta). Para registrar entradas, salidas, traspasos o pedidos, elija un almacén en el menú.
+            </p>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

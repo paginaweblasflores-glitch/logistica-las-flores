@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
-/* Tokens del sistema — rojo del tulipán del logo, negro del trazo, verde de la hoja */
+/* Tokens del sistema — rojo del tulipán del logo, negro del trazo, verde de la hoja, sobre una base arena cálida.
+   El rojo es la ACCIÓN (botón principal, menú activo, errores): no se usa para enlaces ni códigos. */
 @theme {
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-jb), ui-monospace, monospace;
@@ -13,29 +14,38 @@
   --color-brand-700: #a50d26;
   --color-brand-800: #7e0a1d;
 
-  --color-ink-950: #0f1013;
-  --color-ink-900: #16181c;
-  --color-ink-800: #1f2228;
-  --color-ink-700: #2b2f36;
-  --color-ink-600: #3d424b;
+  --color-ink-950: #0f0e0d;
+  --color-ink-900: #1c1917;
+  --color-ink-800: #292524;
+  --color-ink-700: #44403c;
+  --color-ink-600: #57534e;
 
   --color-umaru-500: #3a6ea5;
   --color-umaru-50: #eef3f9;
 
   --color-leaf-500: #5ea71b;
-  --color-leaf-600: #4c8c12;
-  --color-leaf-50: #f1f8e8;
+  /* verde de la hoja, oscurecido para leerse como texto (5.3:1 sobre blanco): ingresos, completado */
+  --color-leaf-600: #2f7a2a;
+  --color-leaf-50: #eef6e8;
 
-  --color-canvas: #f2f3f5;
-  --color-line: #e6e7ea;
-  --color-muted: #6b7280;
-  --color-subtle: #9aa0a8;
+  /* salidas del inventario: naranja tostado (5.4:1), distinto del rojo de las acciones */
+  --color-salida-600: #b54708;
+  --color-salida-50: #fdf1e7;
+
+  /* base arena cálida: las tarjetas blancas se separan del fondo y los grises combinan con el logo */
+  --color-canvas: #efebe5;
+  --color-sand: #f7f3ee;       /* avisos informativos, hover de botones secundarios */
+  --color-th: #f0ebe4;         /* encabezado de tabla (texto ink-700: 9:1) */
+  --color-line: #e3ddd5;
+  --color-line-strong: #c9c1b8;
+  --color-muted: #57534e;      /* texto secundario (7.6:1) */
+  --color-subtle: #736b64;     /* ayudas y «opcional» (5.2:1, antes 2.6:1) */
   /* borde de los campos: 3:1 sobre blanco (WCAG 1.4.11), para que cada caja se vea aunque esté vacía */
-  --color-field: #8b929c;
-  --color-field-hover: #5f6670;
+  --color-field: #8a8178;
+  --color-field-hover: #5c544d;
 
   --radius-card: 14px;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-card: 0 1px 2px rgb(41 37 36 / 0.05), 0 2px 6px -1px rgb(41 37 36 / 0.06);
 }
 
 @layer base {
@@ -44,7 +54,8 @@
     @apply bg-canvas text-ink-900 antialiased;
     font-feature-settings: 'cv11', 'ss01';
   }
-  ::selection { background: var(--color-brand-200); }
+  ::selection { background: var(--color-brand-100); color: var(--color-ink-900); }
+  ::placeholder { color: var(--color-subtle); }
   :focus-visible { outline: 2px solid var(--color-brand-600); outline-offset: 2px; }
   input[type='number']::-webkit-inner-spin-button { opacity: 0.4; }
 }
@@ -65,8 +76,15 @@
   .label .req { @apply text-brand-600; }
   /* formularios en columnas: si una etiqueta ocupa dos líneas, los campos de la fila igual quedan al mismo nivel */
   .grid > label:has(> .label:first-child), .grid > div:has(> .label:first-child) { @apply flex flex-col justify-end; }
-  .th { @apply whitespace-nowrap border-b border-line bg-[#fafafb] px-3 py-2.5 text-left text-[11px] font-semibold tracking-wide text-muted uppercase; }
+  /* encabezado de tabla: texto normal (no mayúsculas chicas), sobre arena */
+  .th { @apply whitespace-nowrap border-b border-line bg-th px-3 py-2.5 text-left text-xs font-semibold text-ink-700; }
   .td { @apply border-b border-line/70 px-3 py-2.5 align-middle text-sm; }
+  tbody tr:last-child > .td { @apply border-b-0; }
+  /* enlace a un documento o ficha: oscuro y subrayado (se ve que es enlace sin competir con los botones rojos) */
+  /* opción elegida en un grupo de botones (periodo, filtro, almacén): se distingue por borde y peso, no solo por color */
+  .opcion { @apply rounded-md px-3 py-1.5 font-semibold text-muted transition-colors hover:bg-sand hover:text-ink-900; }
+  .opcion-on { @apply bg-white text-ink-900 shadow-sm ring-1 ring-inset ring-field hover:bg-white; }
+  .enlace { @apply font-semibold text-ink-900 underline decoration-line-strong decoration-1 underline-offset-[3px] transition-colors hover:text-brand-700 hover:decoration-brand-600; }
 }
 
 /* Impresión de actas, informes y reportes */

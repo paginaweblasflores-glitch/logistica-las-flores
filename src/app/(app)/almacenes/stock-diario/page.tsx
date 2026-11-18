@@ -5,7 +5,7 @@ import { getAmbito } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
 import { fmtDate, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, EmptyState, Badge } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, FilterBar, FiltroFechas, EmptyState, Badge } from '@/components/ui'
 
 export const metadata = { title: 'Stock del día' }
 
@@ -43,8 +43,7 @@ export default async function StockDiarioPage({ searchParams }: { searchParams: 
         })}
       </div>
       <FilterBar>
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
       <Section icon={CalendarCheck} title="Envíos" bodyClassName="p-0" stats={[{ label: 'Envíos', value: filas.length }]}>
         {filas.length ? (
@@ -52,7 +51,7 @@ export default async function StockDiarioPage({ searchParams }: { searchParams: 
             <thead><tr><Th>Día</Th><Th>Almacén</Th><Th>Hora de envío</Th><Th right>Productos</Th><Th right>Valor del stock</Th></tr></thead>
             <tbody>{filas.map((f) => (
               <tr key={f.id} className="hover:bg-canvas/60">
-                <Td><Link href={`/almacenes/stock-diario/${f.id}`} className="font-semibold text-brand-600">{fmtDate(f.fecha)}</Link></Td>
+                <Td><Link href={`/almacenes/stock-diario/${f.id}`} className="enlace">{fmtDate(f.fecha)}</Link></Td>
                 <Td>{f.almacen.nombre}</Td>
                 <Td className="tabular">{hora(f.enviado_at)}</Td>
                 <Td right>{f.productos}</Td>

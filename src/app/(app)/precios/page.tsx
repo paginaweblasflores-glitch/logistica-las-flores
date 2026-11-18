@@ -18,7 +18,7 @@ export default async function PreciosPage({ searchParams }: { searchParams: Prom
   const params = await searchParams
   const [supabase, { local }, locales] = await Promise.all([createClient(), getAmbito(), getLocales()])
   const producto = sp(params, 'producto'), q = sp(params, 'q'), orden = sp(params, 'orden', 'variacion')
-  const { page, size, from, to } = paginar(params)
+  const { from, to } = paginar(params)
   const umbralQ = supabase.from('parametro').select('valor').eq('clave', 'umbral_alerta_precio').maybeSingle()
 
   if (producto) {
@@ -93,7 +93,7 @@ export default async function PreciosPage({ searchParams }: { searchParams: Prom
               {[...rows].reverse().map((r) => (
                 <tr key={r.id} className={Number(r.variacion_pct) > umbral ? 'bg-brand-50/40' : ''}>
                   <Td className="tabular">{fmtDate(r.fecha)}</Td><Td><LocalBadge codigo={r.local_id ? cod.get(r.local_id) : null} /></Td>
-                  <Td>{r.compra_id ? <Link href={`/compras/${r.compra_id}`} className="font-semibold text-brand-600">{r.compra_numero}</Link> : <span className="text-xs text-muted">Histórico</span>}</Td>
+                  <Td>{r.compra_id ? <Link href={`/compras/${r.compra_id}`} className="enlace">{r.compra_numero}</Link> : <span className="text-xs text-muted">Histórico</span>}</Td>
                   <Td>{r.proveedor ?? '—'}</Td><Td className={r.proveedor_anterior && r.proveedor_anterior !== r.proveedor ? 'text-amber-700' : 'text-muted'}>{r.proveedor_anterior ?? '—'}</Td>
                   <Td right className="text-muted">{fmtSoles(r.precio_anterior)}</Td><Td right className="font-semibold">{fmtSoles(r.precio)}</Td>
                   <Td right>{r.variacion === null ? '—' : fmtSoles(r.variacion)}</Td>

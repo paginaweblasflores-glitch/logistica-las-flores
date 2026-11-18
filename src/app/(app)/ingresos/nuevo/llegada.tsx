@@ -7,7 +7,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { ProductPicker, type ProductoLite } from '@/components/product-picker'
 import { useUnidades, factorUnidad, UnidadCelda } from '@/components/unidad-linea'
 import { Badge } from '@/components/ui'
-import { fmtSoles } from '@/lib/format'
+import { fmtSoles, ahoraLima } from '@/lib/format'
 import { registrarEntradaCompra } from '../../compras/actions'
 import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
@@ -44,7 +44,7 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
       uni: l.enPedido?.unidad_id ?? '', equivale: l.enPedido ? String(f) : '' }
   }))
   const [totalDoc, setTotalDoc] = useState('')
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
+  const [ahora] = useState(ahoraLima)   // la hora de Lima al abrir el formulario
   const u = useUnidades()
   // cuántas unidades del producto es 1 de la unidad en que se escribió (1 si es la misma)
   const fac = (f: Fila) => factorUnidad(u, f, f.uni, f.equivale) ?? 1

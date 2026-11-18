@@ -1,4 +1,4 @@
-import { AvisoStockDia } from '@/components/aviso-stock-dia'
+import { AvisoStockDia, estadoStockDia } from '@/components/aviso-stock-dia'
 import Link from 'next/link'
 import { Boxes, ChevronRight, ClipboardList, PackageCheck, PackageX, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -12,6 +12,7 @@ import { getAlmacenActivo } from '@/lib/session'
 
 /** Inicio del panel de almacén: el estado de SU almacén y lo que tiene pendiente hoy. */
 export async function PanelAlmacen({ local }: { local: Local }) {
+  void estadoStockDia()   // precarga: el aviso del stock del día se consulta junto con lo demás
   const supabase = await createClient()
   // almacén elegido arriba (Todos · Almacén 01 · Almacén 02 — Cocina): todo el inicio muestra solo ese
   const sel = await getAlmacenActivo()
@@ -131,13 +132,13 @@ export async function PanelAlmacen({ local }: { local: Local }) {
 
       <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
         <Section icon={History} title="Últimos movimientos" bodyClassName="p-0"
-          actions={<span className="flex gap-3 text-xs font-semibold"><Link href="/entradas" className="text-brand-600">Entradas</Link><Link href="/salidas" className="text-brand-600">Salidas</Link></span>}>
+          actions={<span className="flex gap-3 text-xs font-semibold"><Link href="/entradas" className="enlace">Entradas</Link><Link href="/salidas" className="enlace">Salidas</Link></span>}>
           {ultimos.length ? (
             <Table>
               <thead><tr><Th>N°</Th><Th>Fecha</Th><Th>Tipo</Th><Th>Detalle</Th><Th right>Ítems</Th></tr></thead>
               <tbody>{ultimos.map((m) => (
                 <tr key={m.id}>
-                  <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`/${m.tipo_mov.signo > 0 ? 'entradas' : 'salidas'}/${m.id}`} className="text-brand-600">{m.nro ?? m.numero}</Link></Td>
+                  <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`/${m.tipo_mov.signo > 0 ? 'entradas' : 'salidas'}/${m.id}`} className="enlace">{m.nro ?? m.numero}</Link></Td>
                   <Td className="whitespace-nowrap tabular">{fmtDate(m.fecha, true)}</Td>
                   <Td><Badge tone={m.tipo_mov.signo > 0 ? 'green' : 'red'}>{m.tipo_mov.signo > 0 ? '▲' : '▼'} {m.tipo_mov.nombre}</Badge></Td>
                   <Td className="text-xs">{m.documento?.toUpperCase() ?? m.observacion ?? '—'}<span className="block text-muted">{m.almacen.nombre}</span></Td>
@@ -149,7 +150,7 @@ export async function PanelAlmacen({ local }: { local: Local }) {
         </Section>
 
         <Section icon={PackageX} title="Por reponer" bodyClassName="p-3"
-          actions={<Link href="/inventario?alerta=1" className="text-xs font-semibold text-brand-600">Ver todos ({porReponer.length + sinStock.length})</Link>}>
+          actions={<Link href="/inventario?alerta=1" className="text-xs enlace">Ver todos ({porReponer.length + sinStock.length})</Link>}>
           {porReponer.length + sinStock.length ? (
             <ul className="divide-y divide-line text-sm">
               {[...sinStock, ...porReponer].slice(0, 6).map((s) => (

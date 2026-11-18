@@ -1,4 +1,4 @@
-import { AvisoStockDia } from '@/components/aviso-stock-dia'
+import { AvisoStockDia, estadoStockDia } from '@/components/aviso-stock-dia'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { ElegirAlmacen } from '@/components/elegir-almacen'
 import { getAlmacenes, getProveedores } from '@/lib/queries'
@@ -11,7 +11,7 @@ import { SubmitButton } from '@/components/submit-button'
 import Link from 'next/link'
 import { Truck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { fmtDate } from '@/lib/format'
+import { fmtDate, ahoraLima } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { IngresoLineas } from './lineas'
 import { LlegadaCompra, type LineaPedida } from './llegada'
@@ -23,6 +23,7 @@ import { COMPROBANTES } from '@/lib/documentos'
  * con la boleta en mano. Es lo que antes se anotaba en el Excel "ALMACEN F1 Y H2".
  */
 export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.ReactNode; compraId?: string }) {
+  void estadoStockDia()   // precarga: el aviso del stock del día se consulta junto con lo demás
   const [{ local }, sel, supabase] = await Promise.all([getAmbito(), getAlmacenActivo(), createClient()])
   if (soloConsulta(sel)) return <ElegirAlmacen titulo="Nueva entrada" volver={{ href: '/entradas', label: 'Entradas' }} />
   // compras que Logística ya marcó «Comprado» y deben llegar a este almacén (del requerimiento del almacén)
@@ -87,7 +88,7 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
   }
   // viene elegido el almacén de la barra superior; con «Todos», el Almacén 01
   const principal = almacenes.find((a) => a.id === sel.id) ?? almacenes.find((a) => a.tipo === 'almacen')
-  const ahora = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 16)
+  const ahora = ahoraLima()
   return (
     <>
       <PageHeader title={titulo} back={{ href: '/entradas', label: 'Entradas' }} />

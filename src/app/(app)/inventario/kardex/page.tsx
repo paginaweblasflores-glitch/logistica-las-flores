@@ -5,7 +5,7 @@ import { getAmbito, getAlmacenActivo, getPanel } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
 import { fmtDate, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, EmptyState, Badge, Note } from '@/components/ui'
+import { PageHeader, Section, Th, Td, FilterBar, FilterField, FiltroFechas, EmptyState, Badge, Note } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ProductPicker, type ProductoLite } from '@/components/product-picker'
 import { ExportButton } from '@/components/export-button'
@@ -13,7 +13,7 @@ import { PagedTable } from '@/components/pager'
 
 export const metadata = { title: 'Kardex' }
 
-const REF_LINK: Record<string, string> = { compra: '/compras/', traslado: '/traslados/', conteo: '/conteos/' }
+const REF_LINK: Record<string, string> = { compra: '/compras/', traslado: '/traslados/' }
 
 export default async function KardexPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
@@ -62,8 +62,7 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
       <FilterBar>
         <FilterField label="Producto" className="min-w-72"><ProductPicker name="producto" defaultValue={prod} almacenId={sel.id} /></FilterField>
         {!sel.lista.length && <FilterField label="Almacén"><Select name="almacen" options={almacenes} defaultValue={almacen} placeholder="Todos" /></FilterField>}
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
 
       {!producto && !soloProducto && <div className="mb-4"><Note>Mostrando los últimos 200 movimientos. Elija un producto para ver su Kardex completo con saldo.</Note></div>}
@@ -81,7 +80,7 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
               {rows.map((r) => (
                 <tr key={r.detalle_id} className="hover:bg-canvas/60">
                   <Td className="whitespace-nowrap tabular">{fmtDate(r.fecha, true)}</Td>
-                  <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`/${r.signo > 0 ? 'entradas' : 'salidas'}/${r.movimiento_id}`} className="text-brand-600 hover:underline">{r.nro ?? r.numero}</Link></Td>
+                  <Td className="font-mono text-xs font-semibold whitespace-nowrap"><Link href={`/${r.signo > 0 ? 'entradas' : 'salidas'}/${r.movimiento_id}`} className="enlace">{r.nro ?? r.numero}</Link></Td>
                   <Td>
                     <span className="block font-medium">{r.motivo_nombre ?? r.tipo_nombre}</span>
                     {r.motivo_nombre && <span className="text-xs text-muted">{r.tipo_nombre}</span>}
@@ -90,13 +89,13 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
                   {!producto && <Td right className="font-mono text-xs font-semibold">{r.codigo_almacen ?? '—'}</Td>}
                   {!producto && <Td><Link href={`?producto=${r.producto_id}&desde=${desde}&hasta=${hasta}`} className="hover:text-brand-600">{r.producto_nombre}</Link></Td>}
                   <Td className="text-xs">{r.almacen_nombre}</Td>
-                  <Td right className="text-leaf-600">{r.entrada ? fmtQty(r.entrada) : ''}</Td>
-                  <Td right className="text-brand-700">{r.salida ? fmtQty(r.salida) : ''}</Td>
+                  <Td right className="font-semibold text-leaf-600">{r.entrada ? `+${fmtQty(r.entrada)}` : ''}</Td>
+                  <Td right className="font-semibold text-salida-600">{r.salida ? `−${fmtQty(r.salida)}` : ''}</Td>
                   <Td right className="text-muted">{fmtSoles(r.costo_unitario)}</Td>
                   <Td right>{fmtSoles(r.importe)}</Td>
                   <Td className="text-xs">
                     {r.referencia_tipo && REF_LINK[r.referencia_tipo] && r.referencia_id
-                      ? <Link href={REF_LINK[r.referencia_tipo] + r.referencia_id} className="font-semibold text-brand-600">{r.documento?.toUpperCase() ?? r.referencia_tipo}</Link>
+                      ? <Link href={REF_LINK[r.referencia_tipo] + r.referencia_id} className="enlace">{r.documento?.toUpperCase() ?? r.referencia_tipo}</Link>
                       : <span className="text-muted">{r.documento?.toUpperCase() ?? r.observacion ?? ''}</span>}
                   </Td>
                 </tr>

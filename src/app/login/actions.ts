@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { inicioDe, panelDe } from '@/lib/panel'
+import { inicioDe, panelDe, esDeOtroSistema } from '@/lib/panel'
 
 export type LoginState = { error?: string } | undefined
 
@@ -28,10 +28,13 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   // Directo a la pantalla de inicio de su panel (Jefe de área → Requerimientos). Si se pasa por «/» y el
   // layout vuelve a redirigir, el navegador se queda recargando la página en blanco.
   const destino = next.startsWith('/') && !next.startsWith('//') ? next : '/'
-  if (destino === '/') {
-    const { data: u } = await supabase.from('usuario').select('rol').eq('id', sesion.user.id).maybeSingle()
-    redirect(inicioDe(panelDe(u?.rol ?? '')))
+  const { data: u } = await supabase.from('usuario').select('rol').eq('id', sesion.user.id).maybeSingle()
+  // usuarios de otro sistema (Producción → conteos): no entran a Logística
+  if (esDeOtroSistema(u?.rol ?? '')) {
+    await supabase.auth.signOut()
+    return { error: 'Este usuario trabaja en el sistema de conteos y producción, no en Logística.' }
   }
+  if (destino === '/') redirect(inicioDe(panelDe(u?.rol ?? '')))
   redirect(destino)
 }
 

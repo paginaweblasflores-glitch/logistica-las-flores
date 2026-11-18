@@ -4,7 +4,7 @@ import { Building2, ShoppingCart, TrendingUp, Phone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCiudades, getLocalesOpc } from '@/lib/queries'
 import { fmtDate, fmtPct, fmtSoles } from '@/lib/format'
-import { PageHeader, Section, Table, Th, Td, EstadoBadge, Stat, LocalBadge, Badge, EmptyState } from '@/components/ui'
+import { PageHeader, Section, Th, Td, EstadoBadge, Stat, LocalBadge, Badge, EmptyState } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
@@ -56,7 +56,7 @@ export default async function ProveedorPage({ params }: { params: Promise<{ id: 
           <Section icon={ShoppingCart} title="Historial de compras" bodyClassName="p-0">
             {cs.length ? (
               <PagedTable head={<tr><Th>N°</Th><Th>Fecha</Th><Th>Negocio</Th><Th right>Total</Th><Th right>Ahorro</Th><Th>Entrega</Th><Th>Estado</Th></tr>}>{cs.map((c) => (
-                  <tr key={c.id}><Td><Link href={`/compras/${c.id}`} className="font-semibold text-brand-600">{c.numero}</Link></Td><Td className="tabular">{fmtDate(c.fecha)}</Td>
+                  <tr key={c.id}><Td><Link href={`/compras/${c.id}`} className="enlace">{c.numero}</Link></Td><Td className="tabular">{fmtDate(c.fecha)}</Td>
                     <Td><LocalBadge codigo={c.local_codigo} /></Td><Td right>{fmtSoles(c.total)}</Td><Td right>{fmtSoles(c.ahorro)}</Td>
                     <Td>{c.on_time === null ? '—' : <Badge tone={c.on_time && c.in_full ? 'green' : 'red'}>{c.on_time && c.in_full ? 'OTIF' : 'Fuera'}</Badge>}</Td>
                     <Td><EstadoBadge estado={c.estado} /></Td></tr>

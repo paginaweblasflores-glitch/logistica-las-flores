@@ -57,9 +57,11 @@ export function ReqLineas() {
 
       {/* 1) Agregar bien */}
       {/* pegar una imagen (Ctrl+V) con el cursor en cualquier campo de este formulario la toma como foto */}
-      <div className="rounded-xl border border-line bg-canvas/40 p-4" onPaste={(e) => {
+      <div className="rounded-xl border border-line bg-canvas/40 p-4" onPaste={async (e) => {
         const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/'))
-        if (f) { e.preventDefault(); reducirImagen(f, 480, 0.8).then((v) => set('imagen', v)).catch(() => {}) }
+        if (!f) return
+        e.preventDefault()
+        try { set('imagen', await reducirImagen(f, 480, 0.8)) } catch { /* imagen no válida: se ignora */ }
       }}>
         <p className="mb-3 text-sm font-semibold">{editando === null ? 'Agregar bien' : `Corregir el bien ${editando + 1}`}</p>
         <div className="grid gap-3 md:grid-cols-6">

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useId } from 'react'
 import { Search, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ProductoFoto } from '@/components/producto-foto'
 import { cn } from '@/lib/utils'
+import { useCerrarFuera } from '@/lib/use-cerrar-fuera'
 
 export type ProductoLite = { id: string; codigo: string; nombre: string; unidad: string; costo_referencia: number; tipo: string
   /** lleva fecha de vencimiento (FIFO por lotes) */
@@ -35,7 +36,9 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
   const [term, setTerm] = useState('')
   const [results, setResults] = useState<ProductoLite[]>([])
   const [open, setOpen] = useState(false)
+  const listaId = useId()
   const [active, setActive] = useState(0)
+  const [fallo, setFallo] = useState(false)   // la búsqueda no respondió: no es lo mismo que «sin coincidencias»
   const boxRef = useRef<HTMLDivElement>(null)
 
   // Búsqueda en la base (fn_buscar_productos): sin mayúsculas ni tildes, todas las palabras, primero el código
@@ -45,14 +48,17 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
   // cada clic sin texto vuelve a pedir la lista (si la primera vez llegó vacía, no se queda así)
   const [buscarTodo, setBuscarTodo] = useState(0)
   useEffect(() => {
-    if (!term.trim() && !buscarTodo) { setResults([]); setOpen(false); return }
+    // al borrar también se invalida la búsqueda en curso: si llega tarde, no vuelve a abrir la lista
     const n = ++ultima.current
+    if (!term.trim() && !buscarTodo) return
     const t = setTimeout(async () => {
       const supabase = createClient()
-      const { data } = await supabase.rpc('fn_buscar_productos', {
+      const { data, error } = await supabase.rpc('fn_buscar_productos', {
         p_texto: term.trim(), p_almacen: almacenId ?? null, p_tipos: tipos?.length ? tipos : null, p_limite: term.trim() ? 30 : 300,
       })
       if (n !== ultima.current) return   // ya se escribió otra cosa: esta respuesta llegó tarde
+      setFallo(!!error)
+      if (error) { setResults([]); setOpen(true); return }
       setResults(((data ?? []) as { id: string; codigo: string; nombre: string; tipo: string; costo_referencia: number; controla_lote: boolean; unidad: string; stock: number | null
           unidad_id: string; contenido: number | null; contenido_unidad_id: string | null; contenido_unidad: string | null }[])
         .map((p) => ({ ...p, costo_referencia: Number(p.costo_referencia), stock: p.stock === null ? null : Number(p.stock) })))
@@ -62,11 +68,7 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
     return () => clearTimeout(t)
   }, [term, tipos, almacenId, buscarTodo])
 
-  useEffect(() => {
-    const close = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [])
+  useCerrarFuera(boxRef, open, () => setOpen(false))
 
   function choose(p: ProductoLite) {
     if (onSelect) { onSelect(p); setTerm(''); setResults([]); setOpen(false); setBuscarTodo(0); return }
@@ -92,7 +94,10 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
       <input
         value={term}
         autoFocus={autoFocus}
-        onChange={(e) => setTerm(e.target.value)}
+        onChange={(e) => {
+          setTerm(e.target.value)
+          if (!e.target.value.trim()) { setResults([]); setOpen(false) }
+        }}
         onFocus={() => { if (!term.trim()) setBuscarTodo((n) => n + 1); else if (results.length) setOpen(true) }}
         onClick={() => { if (!term.trim()) setBuscarTodo((n) => n + 1); else if (results.length) setOpen(true) }}
         onKeyDown={(e) => {
@@ -106,10 +111,11 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
         className="field pl-9"
         role="combobox"
         aria-expanded={open}
+        aria-controls={listaId}
         aria-autocomplete="list"
       />
       {open && results.length > 0 && (
-        <ul role="listbox" className="absolute z-40 mt-1 max-h-72 w-full min-w-72 overflow-auto rounded-lg border border-line bg-white py-1 shadow-xl">
+        <ul id={listaId} role="listbox" className="absolute z-40 mt-1 max-h-72 w-full min-w-72 overflow-auto rounded-lg border border-line bg-white py-1 shadow-xl">
           {results.map((p, i) => (
             <li key={p.id} role="option" aria-selected={i === active}
                 onMouseDown={(e) => { e.preventDefault(); choose(p) }}
@@ -117,15 +123,16 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
                 className={cn('flex cursor-pointer items-center gap-3 px-3 py-2 text-sm', i === active && 'bg-brand-50')}>
               <ProductoFoto src={p.imagen_url} alt="" />
               <span className="min-w-0">
-                <span className="block font-medium"><span className="mr-1.5 font-mono text-xs font-semibold text-brand-700">{almacenId ? `Cód. ${p.codigo}` : p.codigo}</span><Resaltado texto={p.nombre} busqueda={term} /></span>
+                <span className="block font-medium"><span className="mr-1.5 font-mono text-xs font-semibold text-ink-700">{almacenId ? `Cód. ${p.codigo}` : p.codigo}</span><Resaltado texto={p.nombre} busqueda={term} /></span>
                 <span className="text-xs text-muted">{p.unidad}{almacenId ? <> · Stock: <b className={!p.stock || p.stock <= 0 ? 'text-brand-700' : 'text-ink-900'}>{p.stock === null || p.stock === undefined ? 'sin cantidad' : p.stock.toLocaleString('es-PE', { maximumFractionDigits: 3 })}</b></> : <> · {p.tipo}</>}</span>
               </span>
             </li>
           ))}
         </ul>
       )}
-      {open && term.trim().length > 0 && results.length === 0 && (
-        <div className="absolute z-40 mt-1 w-full rounded-lg border border-line bg-white px-3 py-3 text-sm text-muted shadow-xl">Sin coincidencias</div>
+      {open && (fallo || term.trim().length > 0) && results.length === 0 && (
+        <div className="absolute z-40 mt-1 w-full rounded-lg border border-line bg-white px-3 py-3 text-sm text-muted shadow-xl">
+          {fallo ? 'No se pudo buscar. Revise su conexión y vuelva a intentarlo.' : 'Sin coincidencias'}</div>
       )}
     </div>
   )

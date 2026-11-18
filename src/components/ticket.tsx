@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { useMontado } from '@/lib/use-montado'
 import { createPortal } from 'react-dom'
 import { Printer } from 'lucide-react'
 import { btnClass } from '@/components/ui'
@@ -26,9 +27,16 @@ const bloque = { borderBottom: '1px dashed #000', paddingBottom: '6px', marginBo
 
 /** Botón «Imprimir ticket»; con `auto` se imprime solo al abrir (recién registrado). */
 export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: { data: TicketData; auto?: boolean; label?: string }) {
-  const [listo, setListo] = useState(false)
+  const listo = useMontado()   // el ticket se arma en <body>: solo en el navegador
   const hecho = useRef(false)
-  useEffect(() => setListo(true), [])
+  // tareas pendientes de la impresión: se cancelan si se sale de la pantalla antes de imprimir
+  const pendientes = useRef<(() => void)[]>([])
+  useEffect(() => {
+    return () => {
+      pendientes.current.forEach((cancelar) => cancelar()); pendientes.current = []
+      document.documentElement.classList.remove('imprimiendo-ticket')
+    }
+  }, [])
 
   function imprimir() {
     const html = document.documentElement
@@ -41,7 +49,11 @@ export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: 
       let ok = false
       const go = () => { if (!ok) { ok = true; window.print() } }
       logo.addEventListener('load', go, { once: true }); logo.addEventListener('error', go, { once: true })
-      setTimeout(go, 1500)
+      const espera = setTimeout(go, 1500)
+      pendientes.current.push(() => {
+        ok = true; clearTimeout(espera)
+        logo.removeEventListener('load', go); logo.removeEventListener('error', go); window.removeEventListener('afterprint', fin)
+      })
     } else window.print()
   }
 
@@ -50,7 +62,8 @@ export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: 
     hecho.current = true
     // quita ?imprimir=1 para que al recargar no vuelva a imprimir
     window.history.replaceState(null, '', window.location.pathname)
-    setTimeout(imprimir, 300)
+    const espera = setTimeout(imprimir, 300)
+    pendientes.current.push(() => clearTimeout(espera))
   }, [auto, listo])
 
   return (

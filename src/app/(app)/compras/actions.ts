@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { run, check, must, type ActionResult } from '@/lib/actions'
+import { run, afecto, check, enUnaOperacion, type ActionResult, type Paso } from '@/lib/actions'
 import { parseLines, num, limaIso as iso, fechaRegistro, enUnidadDelProducto } from '@/lib/lines'
 import { resolverOrigen, resolverTransportista } from '@/lib/listas-abiertas'
 
@@ -36,7 +36,8 @@ export async function crearCompra(_: ActionResult, fd: FormData): Promise<Action
     const ciudad = await resolverOrigen(supabase, fd.get('ciudad'))
     const ahora = new Date().toISOString()
 
-    const compra = must(await supabase.from('compra').insert({
+    // todo en UNA transacción: si falla el detalle o la recepción, no queda una compra a medias
+    const pasos: Paso[] = [{ insertar: 'compra', como: 'compra', valores: {
       local_id: alm!.local_id,
       almacen_id: String(fd.get('almacen')),
       proveedor_id: fd.get('proveedor') || null,
@@ -52,26 +53,21 @@ export async function crearCompra(_: ActionResult, fd: FormData): Promise<Action
       oferta_id: ofertaId || null,
       observacion: fd.get('observacion') || null,
       estado: accion === 'borrador' ? 'borrador' : 'aprobada',
-    }).select('id').single())
-
-    check(await supabase.from('compra_detalle').insert(lineas.map((l) => ({
-      compra_id: compra.id, producto_id: l.producto_id || null, cantidad_solicitada: num(l.cantidad),
+    } }, { insertar: 'compra_detalle', valores: lineas.map((l) => ({
+      compra_id: '@id:compra', producto_id: l.producto_id || null, cantidad_solicitada: num(l.cantidad),
       descripcion: l.producto_id ? null : String(l.descripcion).trim(), unidad_texto: l.producto_id ? null : (l.unidad || 'UND'),
       requerimiento_detalle_id: l.requerimiento_detalle_id || null,
       precio_unitario: num(l.precio), fecha_vencimiento: l.fecha_vencimiento || null,
-    }))))
+    })) }]
 
     // el flete no va aquí: se agrega en la ficha de la compra cuando ocurre (agregarTransporte), por tramos
 
     // primero "comprado"; si se recibe ahora mismo, la recepción lo pasa a "atendido" cuando llegó todo
-    if (reqId) {
-      await supabase.from('requerimiento').update({ estado: 'comprado' }).eq('id', reqId).in('estado', ['aprobado', 'en_cotizacion'])
-    }
-    if (accion === 'recibir') {
-      check(await supabase.rpc('fn_recibir_compra', { p_compra: compra.id, p_fecha_entrega: iso(fd.get('fecha_entrega')) ?? ahora }))
-    }
+    if (reqId) pasos.push({ actualizar: 'requerimiento', valores: { estado: 'comprado' }, donde: { id: reqId, estado: ['aprobado', 'en_cotizacion'] } })
+    if (accion === 'recibir') pasos.push({ llamar: 'fn_recibir_compra', args: { p_compra: '@id:compra', p_fecha_entrega: iso(fd.get('fecha_entrega')) ?? ahora } })
+    const ids = await enUnaOperacion(supabase, pasos)
     revalidatePath('/compras', 'layout')
-    redirect(`/compras/${compra.id}`)
+    redirect(`/compras/${ids.compra}`)
   })
 }
 
@@ -79,7 +75,9 @@ export async function aprobarCompra(_: ActionResult, fd: FormData): Promise<Acti
   return run(async () => {
     const supabase = await createClient()
     const id = String(fd.get('id'))
-    check(await supabase.from('compra').update({ estado: 'aprobada', fecha_aprobacion: new Date().toISOString() }).eq('id', id))
+    // solo una compra en borrador se aprueba (si otra pestaña ya la aprobó o anuló, se avisa en vez de fingir éxito)
+    afecto(await supabase.from('compra').update({ estado: 'aprobada', fecha_aprobacion: new Date().toISOString() }).eq('id', id).eq('estado', 'borrador').select('id'),
+      'Esta compra ya no está en borrador: recargue la página.')
     revalidatePath(`/compras/${id}`)
     return { message: 'Compra aprobada. El plazo OTIF empieza a contar desde ahora.' }
   })
@@ -205,14 +203,16 @@ export async function registrarEntradaCompra(_: ActionResult, fd: FormData): Pro
     // el proveedor de la boleta (Logística marca «Comprado» sin proveedor)
     const proveedor = String(fd.get('proveedor') ?? '')
     if (!proveedor) return { error: 'Elija el proveedor de la boleta.' }
-    check(await supabase.rpc('fn_compra_poner_proveedor', { p_compra: String(fd.get('compra')), p_proveedor: proveedor }))
-    const { data, error } = await supabase.rpc('fn_entrada_de_compra', {
-      p_compra: String(fd.get('compra')), p_fecha: fechaRegistro(fd),
-      p_tipo_doc: String(fd.get('tipo_documento') ?? ''), p_num_doc: String(fd.get('numero_documento') ?? ''),
-      p_total_doc: total ? Number(total) : null, p_lineas: lineas,
-    })
-    if (error) throw error
-    const r = data as { movimiento_id: string | null }
+    // el proveedor de la boleta y la entrada van juntos: si la entrada falla, el proveedor tampoco cambia
+    const ids = await enUnaOperacion(supabase, [
+      { llamar: 'fn_compra_poner_proveedor', args: { p_compra: String(fd.get('compra')), p_proveedor: proveedor } },
+      { llamar: 'fn_entrada_de_compra', como: 'entrada', args: {
+        p_compra: String(fd.get('compra')), p_fecha: fechaRegistro(fd),
+        p_tipo_doc: String(fd.get('tipo_documento') ?? ''), p_num_doc: String(fd.get('numero_documento') ?? ''),
+        p_total_doc: total ? Number(total) : null, p_lineas: lineas,
+      } },
+    ])
+    const r = JSON.parse(ids.entrada || '{}') as { movimiento_id: string | null }
     revalidatePath('/entradas', 'layout')
     revalidatePath('/inventario', 'layout')
     revalidatePath('/requerimientos', 'layout')

@@ -41,7 +41,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
     return con.map((c) => fmtDate(c.lote!.fecha_vencimiento) + (d.lote_consumo.length > 1 ? ` (${fmtQty(c.cantidad)})` : '')).join(' · ')
   }
   const hayVence = m.movimiento_detalle.some((d) => vence(d))
-  const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : m.referencia_tipo === 'conteo' ? `/conteos/${m.referencia_id}` : null
+  const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : null
   const conTicket = m.tipo === 'salida_consumo' && !m.anulado
 
   const datos: [string, React.ReactNode][] = [
@@ -50,7 +50,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
     ['Almacén', m.almacen.nombre],
     ...(m.area ? [[sentido === 'entrada' ? 'Área que devuelve' : 'Área destino', m.area.nombre] as [string, string]] : []),
     ...(m.recibe ? [['Entregado a', m.recibe] as [string, string]] : []),
-    ...(m.documento ? [['Documento', origen ? <Link key="d" href={origen} className="font-semibold text-brand-600">{m.documento.toUpperCase()}</Link> : m.documento.toUpperCase()] as [string, React.ReactNode]] : []),
+    ...(m.documento ? [['Documento', origen ? <Link key="d" href={origen} className="enlace">{m.documento.toUpperCase()}</Link> : m.documento.toUpperCase()] as [string, React.ReactNode]] : []),
     ...(m.observacion ? [['Observación', m.observacion] as [string, string]] : []),
   ]
 

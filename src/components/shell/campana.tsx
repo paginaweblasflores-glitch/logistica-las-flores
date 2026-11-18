@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Bell, ChevronRight, ClipboardCheck, PackageCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ProductoFoto } from '@/components/producto-foto'
+import { useCerrarFuera } from '@/lib/use-cerrar-fuera'
 
 /** Almacenes: producto que llegó a su stock mínimo */
 export type AlertaStock = {
@@ -31,6 +32,21 @@ const claveDe = (avisos: Avisos, i: number) => avisos.tipo === 'requerimientos'
   : `${avisos.items[i].producto_id}:${avisos.items[i].almacen_nombre}:${avisos.items[i].estado}`
 const GUARDADO = (tipo: string) => `campana-vistos:${tipo}`
 
+/** Avisos ya vistos en este navegador (localStorage), leídos como fuente externa: sin efecto ni render extra. */
+const avisarCambio = new Set<() => void>()
+function suscribir(cb: () => void) {
+  avisarCambio.add(cb)
+  window.addEventListener('storage', cb)   // otra pestaña los marcó como vistos
+  return () => { avisarCambio.delete(cb); window.removeEventListener('storage', cb) }
+}
+function leerVistos(tipo: string) {
+  try { return localStorage.getItem(GUARDADO(tipo)) ?? '[]' } catch { return '[]' }
+}
+function guardarVistos(tipo: string, claves: string[]) {
+  try { localStorage.setItem(GUARDADO(tipo), JSON.stringify(claves)) } catch { /* sin almacenamiento: solo esta vez */ }
+  avisarCambio.forEach((cb) => cb())
+}
+
 const Punto = ({ codigo }: { codigo: string }) => <span className={cn('size-1.5 shrink-0 rounded-full', codigo === 'LF' ? 'bg-brand-500' : 'bg-umaru-500')} />
 
 /**
@@ -45,36 +61,32 @@ export function Campana({ avisos }: { avisos: Avisos }) {
   // El número rojo cuenta solo lo NUEVO: al abrir la campanita queda visto (en este navegador)
   // y vuelve a aparecer cuando llega otro aviso o uno cambia de estado.
   const claves = [...avisos.items.map((_, i) => claveDe(avisos, i)), ...(avisos.tipo === 'stock' ? avisos.vencen.map((v) => `v:${v.id}:${v.estado}`) : [])]
-  const [vistos, setVistos] = useState<Set<string> | null>(null)
-  useEffect(() => {
-    try { setVistos(new Set(JSON.parse(localStorage.getItem(GUARDADO(avisos.tipo)) ?? '[]') as string[])) } catch { setVistos(new Set()) }
-  }, [avisos.tipo])
+  // en el servidor (null) aún no se sabe qué vio: no se muestra número hasta leerlo en el navegador
+  const guardados = useSyncExternalStore(suscribir, () => leerVistos(avisos.tipo), () => null)
+  const vistos = useMemo(() => {
+    if (guardados === null) return null
+    try { return new Set(JSON.parse(guardados) as string[]) } catch { return new Set<string>() }
+  }, [guardados])
   const nuevos = vistos ? claves.filter((c) => !vistos.has(c)).length : 0
   function abrir() {
     setOpen((o) => !o)
     // se guardan solo los avisos vigentes: lo ya atendido no ocupa espacio
-    setVistos(new Set(claves))
-    try { localStorage.setItem(GUARDADO(avisos.tipo), JSON.stringify(claves)) } catch { /* sin almacenamiento: solo esta vez */ }
+    guardarVistos(avisos.tipo, claves)
   }
 
-  useEffect(() => {
-    if (!open) return
-    const cerrar = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', cerrar)
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', cerrar); document.removeEventListener('keydown', esc) }
-  }, [open])
+  useCerrarFuera(ref, open, () => setOpen(false), { escape: true })
 
 
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={abrir} aria-haspopup="dialog" aria-expanded={open}
         aria-label={total ? (esReq ? `${total} ${total === 1 ? 'requerimiento' : 'requerimientos'} por aprobar` : `${total} productos por acabarse`) : 'Sin avisos'}
-        className={cn('relative grid size-10 place-items-center rounded-full text-ink-700 transition-colors hover:bg-canvas', open && 'bg-canvas')}>
-        <Bell className="size-5" />
+        className={cn('group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors',
+          open ? 'bg-[#3a3431] text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white')}>
+        <Bell className="size-[17px] shrink-0 text-white/45 group-hover:text-white/80" aria-hidden />
+        <span className="flex-1">Avisos</span>
         {nuevos > 0 && (
-          <span className="absolute top-1 right-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-brand-600 px-1 text-[10px] leading-none font-bold text-white ring-2 ring-white tabular">
+          <span className="grid h-[19px] min-w-[19px] place-items-center rounded-full bg-brand-600 px-1.5 text-[10.5px] leading-none font-bold text-white tabular">
             {nuevos > 99 ? '99+' : nuevos}
           </span>
         )}
@@ -82,7 +94,7 @@ export function Campana({ avisos }: { avisos: Avisos }) {
 
       {open && (
         <div role="dialog" aria-label={esReq ? 'Avisos de requerimientos' : 'Avisos de stock'}
-          className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-xl border border-line bg-white shadow-xl sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[400px]">
+          className="fixed inset-x-3 bottom-24 z-50 overflow-hidden rounded-xl border border-line bg-white text-ink-900 shadow-xl lg:absolute lg:inset-x-auto lg:bottom-0 lg:left-full lg:ml-3 lg:w-[400px]">
           <div className="border-b border-line px-4 py-3">
             <p className="text-sm font-semibold">{esReq ? 'Requerimientos por aprobar' : 'Avisos del almacén'}</p>
             <p className="text-xs text-muted">

@@ -7,7 +7,7 @@ import { Check } from 'lucide-react'
 import { btnClass } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
-import { fmtQty, fmtSoles } from '@/lib/format'
+import { fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { registrarOferta, usarPreciosAnteriores } from '../actions'
 import { ProveedorPicker, type ProveedorOpc } from '@/components/proveedor-picker'
 import { CANALES, canalSugerido, type Canal } from '@/lib/proveedor-tipo'
@@ -41,7 +41,7 @@ export function OfertaForm({ cotizacionId, proveedores, items, marcados: marcado
   const [canal, setCanal] = useState<Canal>('tienda')
   // al guardar se limpia todo para registrar la oferta de otro proveedor
   const [vuelta, setVuelta] = useState(0)
-  const hoy = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10)
+  const [hoy] = useState(hoyLima)   // la fecha de Lima al abrir el formulario
 
   const enPedido = (i: ItemOferta) => !!i.unidadPedido && i.factor !== 1
   // precio por unidad del producto (lo que se guarda y se compara): el del saco ÷ lo que trae; si solo dio el suelto, ese

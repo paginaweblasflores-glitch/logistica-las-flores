@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ShoppingCart, ClipboardCheck, ClipboardList, TrendingUp, Layers, Truck, Target, BellRing, PackageX, ChevronRight } from 'lucide-react'
+import { ShoppingCart, ClipboardCheck, TrendingUp, Layers, Truck, Target, BellRing, PackageX, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel } from '@/lib/session'
 import { PanelAlmacen } from './panel-almacen'
@@ -105,8 +105,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const pendientes = [
     { label: 'Requerimientos por atender', value: d.requerimientos.pendientes, href: '/requerimientos' },
     { label: 'Compras por recibir', value: c.pendientes, href: '/compras?estado=aprobada' },
-    { label: 'Conteos sin cerrar', value: d.inventario.pendientes, href: '/conteos' },
-    { label: 'Diferencias de viandas vs Kardex', value: d.carnes.alertas, href: '/carnes' },
   ]
 
   return (
@@ -196,7 +194,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Section>
 
         <Section icon={PackageX} title="Stock por debajo del mínimo" bodyClassName="p-3"
-                 actions={<Link href="/inventario?estado=critico" className="text-xs font-semibold text-brand-600">Ver todo ({d.stock.criticos})</Link>}>
+                 actions={<Link href="/inventario?estado=critico" className="text-xs enlace">Ver todo ({d.stock.criticos})</Link>}>
           {stockCritico.length ? (
             <ul className="divide-y divide-line text-sm">
               {stockCritico.map((s, i) => (
@@ -211,7 +209,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Section>
 
         <Section icon={Layers} title="Precios que más cambiaron" bodyClassName="p-3"
-                 actions={<Link href="/precios" className="text-xs font-semibold text-brand-600">Trazabilidad</Link>}>
+                 actions={<Link href="/precios" className="text-xs enlace">Trazabilidad</Link>}>
           {subidas.length ? (
             <ul className="divide-y divide-line text-sm">
               {subidas.map((r) => (
@@ -229,9 +227,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           ) : <p className="py-8 text-center text-sm text-muted">Sin cambios de precio</p>}
         </Section>
       </div>
-      <p className="mt-4 flex items-center gap-1.5 text-xs text-muted"><ClipboardList className="size-3.5" />
-        Descuentos del periodo: {fmtSoles(d.descuentos.total)} (roturas {fmtSoles(d.descuentos.roturas)}) · detalle en <Link href="/descuentos" className="font-semibold text-brand-600">Descuentos</Link> y <Link href="/reportes" className="font-semibold text-brand-600">Reportes</Link>.
-      </p>
     </>
   )
 }

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Local } from '@/lib/session'
 import { fmtDate, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { sp, cn } from '@/lib/utils'
-import { PageHeader, Section, Th, Td, FilterBar, FilterField, EmptyState } from '@/components/ui'
+import { PageHeader, Section, Th, Td, FilterBar, FiltroFechas, EmptyState } from '@/components/ui'
 import { PagedTable } from '@/components/pager'
 import { ExportButton } from '@/components/export-button'
 
@@ -57,8 +57,7 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
       <PageHeader title="Reportes del almacén" description={`Movimientos de ${local.nombre} del ${fmtDate(desde)} al ${fmtDate(hasta)}.`} />
       <FilterBar>
         <input type="hidden" name="ver" value={ver} />
-        <FilterField label="Desde"><input type="date" name="desde" defaultValue={desde} className="field" /></FilterField>
-        <FilterField label="Hasta"><input type="date" name="hasta" defaultValue={hasta} className="field" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
