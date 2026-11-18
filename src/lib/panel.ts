@@ -34,3 +34,7 @@ export function rutaPermitida(panel: Panel, path: string | null) {
   if (panel === 'almacen') return !SOLO_LOGISTICA.some((b) => coincide(path, b))
   return !SOLO_ALMACEN.some((b) => coincide(path, b))
 }
+
+/** Lo que dice debajo de «Las Flores» en la barra lateral. */
+export const subtituloDe = (panel: Panel, negocio?: string | null) =>
+  panel === 'almacen' ? `Almacén ${negocio === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : 'Logística'

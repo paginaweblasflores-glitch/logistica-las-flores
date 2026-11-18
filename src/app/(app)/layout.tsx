@@ -1,51 +1,82 @@
+import { Suspense } from 'react'
 import { Info } from 'lucide-react'
 import { Sidebar } from '@/components/shell/sidebar'
+import { SidebarEsqueleto } from '@/components/shell/sidebar-esqueleto'
+import { Cargando } from '@/components/cargando'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getAmbito, getUsuario, getAlmacenActivo, soloConsulta } from '@/lib/session'
-import { panelDe, rutaPermitida, inicioDe, esDeOtroSistema } from '@/lib/panel'
+import { panelDe, rutaPermitida, inicioDe, esDeOtroSistema, subtituloDe } from '@/lib/panel'
 import { etiquetaNegocio } from '@/lib/empresa'
 import { createClient } from '@/lib/supabase/server'
 import type { AlertaStock, AvisoRequerimiento, AvisoVence, Avisos } from '@/components/shell/campana'
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [usuario, ambito] = await Promise.all([getUsuario(), getAmbito()])
-  // usuarios de otro sistema (Producción → conteos) no entran a Logística
-  if (esDeOtroSistema(usuario.rol)) redirect('/auth/salir?error=otro-sistema')
-  const panel = panelDe(usuario.rol)
-  const almacenSel = await getAlmacenActivo()
-  const avisos = panel === 'area' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
-  // Cada panel abre solo sus pantallas (p. ej. el almacén no entra a Cotizaciones; Logística no registra salidas)
-  if (!rutaPermitida(panel, (await headers()).get('x-pathname'))) redirect(inicioDe(panel))
+/**
+ * Marco de todas las pantallas. No espera la sesión: el marco aparece al instante y, en paralelo,
+ * llegan la barra lateral (usuario, negocio, avisos) y el contenido de la pantalla (navegación instantánea).
+ */
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh">
       {/* negocio/almacén, avisos y usuario van en la barra lateral: el contenido usa todo el alto */}
-      <Sidebar
-        panel={panel}
-        subtitulo={panel === 'almacen' ? `Almacén ${ambito.local?.codigo === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : 'Logística'}
-        barra={{
-          ambito: ambito.codigo,
-          ambitoFijo: ambito.fijo || panel === 'area',
-          locales: ambito.locales.map((l) => ({ codigo: l.codigo, nombre: l.nombre, titulo: etiquetaNegocio(l) })),
-          almacenes: almacenSel.lista,
-          almacenActivo: almacenSel.lista.length > 1 ? almacenSel.id : null,
-          usuario: { nombre: usuario.nombre, rol: usuario.rol },
-          avisos,
-        }}
-      />
+      <Suspense fallback={<SidebarEsqueleto />}>
+        <BarraLateral />
+      </Suspense>
       <div className="lg:pl-56 print:pl-0">
         <main className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 print:max-w-none print:p-0">
-          {/* con «Todos» el almacén solo consulta: se explica por qué no aparecen los botones para registrar */}
-          {panel === 'almacen' && soloConsulta(almacenSel) && (
-            <p className="no-print mb-5 flex items-center gap-2 rounded-xl border border-line bg-sand px-4 py-2.5 text-sm text-ink-700">
-              <Info className="size-4 shrink-0 text-muted" aria-hidden />
-              Está viendo <b>Todos</b> los almacenes (solo consulta). Para registrar entradas, salidas, traspasos o pedidos, elija un almacén en el menú.
-            </p>
-          )}
-          {children}
+          <Suspense fallback={<Cargando />}>
+            <Guardia>{children}</Guardia>
+          </Suspense>
         </main>
       </div>
     </div>
+  )
+}
+
+/** Barra lateral con la sesión: usuario, negocio o almacén elegido y la campanita. */
+async function BarraLateral() {
+  const [usuario, ambito, almacenSel] = await Promise.all([getUsuario(), getAmbito(), getAlmacenActivo()])
+  const panel = panelDe(usuario.rol)
+  const avisos = panel === 'area' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
+  return (
+    <Sidebar
+      panel={panel}
+      subtitulo={subtituloDe(panel, ambito.local?.codigo)}
+      barra={{
+        ambito: ambito.codigo,
+        ambitoFijo: ambito.fijo || panel === 'area',
+        locales: ambito.locales.map((l) => ({ codigo: l.codigo, nombre: l.nombre, titulo: etiquetaNegocio(l) })),
+        almacenes: almacenSel.lista,
+        almacenActivo: almacenSel.lista.length > 1 ? almacenSel.id : null,
+        usuario: { nombre: usuario.nombre, rol: usuario.rol },
+        avisos,
+      }}
+    />
+  )
+}
+
+/**
+ * Antes de mostrar la pantalla: el usuario es de este sistema y su panel puede abrirla
+ * (p. ej. el almacén no entra a Cotizaciones; Logística no registra salidas).
+ * La sesión se lee una sola vez por solicitud (cache de React): la pantalla la reutiliza sin otra consulta.
+ */
+async function Guardia({ children }: { children: React.ReactNode }) {
+  const [usuario, almacenSel, cabeceras] = await Promise.all([getUsuario(), getAlmacenActivo(), headers()])
+  // usuarios de otro sistema (Producción → conteos) no entran a Logística
+  if (esDeOtroSistema(usuario.rol)) redirect('/auth/salir?error=otro-sistema')
+  const panel = panelDe(usuario.rol)
+  if (!rutaPermitida(panel, cabeceras.get('x-pathname'))) redirect(inicioDe(panel))
+  return (
+    <>
+      {/* con «Todos» el almacén solo consulta: se explica por qué no aparecen los botones para registrar */}
+      {panel === 'almacen' && soloConsulta(almacenSel) && (
+        <p className="no-print mb-5 flex items-center gap-2 rounded-xl border border-line bg-sand px-4 py-2.5 text-sm text-ink-700">
+          <Info className="size-4 shrink-0 text-muted" aria-hidden />
+          Está viendo <b>Todos</b> los almacenes (solo consulta). Para registrar entradas, salidas, traspasos o pedidos, elija un almacén en el menú.
+        </p>
+      )}
+      {children}
+    </>
   )
 }
 

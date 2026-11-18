@@ -1,15 +1,12 @@
+import { Suspense } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { LoginForm } from './login-form'
 
 export const metadata = { title: 'Iniciar sesión' }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
-  const { next, error } = await searchParams
-  const supabase = await createClient()
-  const { data } = await supabase.rpc('fn_usuarios_login')
-  const usuarios = ((data ?? []) as { username: string }[]).map((u) => u.username)
-
+/** La tarjeta (logo y título) aparece al instante; la lista de usuarios y los avisos llegan enseguida. */
+export default function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   return (
     <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-ink-900 px-4 py-10">
       {/* Fondo: negro con resplandor rojo del tulipán */}
@@ -26,21 +23,46 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p className="mt-1 text-sm text-muted">Restaurante Las Flores · Hotel Umaru</p>
         </div>
 
-        {error === 'otro-sistema' && (
-          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Este usuario trabaja en el sistema de conteos y producción, no en Logística.
-          </p>
-        )}
-        {error === 'perfil' && (
-          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Su cuenta no tiene un perfil asignado en el sistema. Solicite el acceso al administrador.
-          </p>
-        )}
-
-        <LoginForm next={next ?? '/'} usuarios={usuarios} />
-
-        <p className="mt-7 text-center text-xs text-subtle">Corporación Las Flores · Huamanga, Ayacucho © {new Date().getFullYear()}</p>
+        <Suspense fallback={<FormularioEsqueleto />}>
+          <Formulario searchParams={searchParams} />
+        </Suspense>
       </section>
     </main>
+  )
+}
+
+async function Formulario({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
+  const [{ next, error }, supabase] = await Promise.all([searchParams, createClient()])
+  const { data } = await supabase.rpc('fn_usuarios_login')
+  const usuarios = ((data ?? []) as { username: string }[]).map((u) => u.username)
+  return (
+    <>
+      {error === 'otro-sistema' && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Este usuario trabaja en el sistema de conteos y producción, no en Logística.
+        </p>
+      )}
+      {error === 'perfil' && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Su cuenta no tiene un perfil asignado en el sistema. Solicite el acceso al administrador.
+        </p>
+      )}
+
+      <LoginForm next={next ?? '/'} usuarios={usuarios} />
+
+      <p className="mt-7 text-center text-xs text-subtle">Corporación Las Flores · Huamanga, Ayacucho © {new Date().getFullYear()}</p>
+    </>
+  )
+}
+
+/** Mismas medidas que el formulario para que nada salte al completarse. */
+function FormularioEsqueleto() {
+  return (
+    <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Cargando">
+      <div className="h-[68px] rounded-lg bg-canvas" />
+      <div className="h-[68px] rounded-lg bg-canvas" />
+      <div className="h-11 rounded-lg bg-brand-100" />
+      <div className="mx-auto mt-7 h-4 w-56 rounded bg-canvas" />
+    </div>
   )
 }
