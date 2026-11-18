@@ -17,9 +17,9 @@ export default async function NuevoProductoPage() {
     if (soloConsulta(sel) || !sel.actual) return <ElegirAlmacen titulo="Nuevo producto" volver={{ href: '/productos', label: 'Catálogo' }} />
     return (
       <>
-        <PageHeader title={sel.lista.length > 1 ? `Nuevo producto · ${sel.actual.corto}` : 'Nuevo producto'} back={{ href: '/productos', label: 'Catálogo' }}
-          description={`Se registra en ${sel.actual.corto} con el siguiente código de ese almacén. Al escribir el nombre le mostramos los parecidos que ya existen, para no duplicarlo.`} />
-        <Section title="Datos del producto"><AltaConSugerencias local={local} categorias={categorias} unidades={opcUnidades} almacenId={sel.actual.id} /></Section>
+        <PageHeader title={sel.lista.length > 1 ? `Nuevo producto · ${sel.actual.corto}` : 'Nuevo producto'} back={{ href: '/productos', label: 'Catálogo' }} />
+        {/* «Datos del producto», «Stock inicial» y «Parámetros del almacén»: las mismas partes que la ficha */}
+        <AltaConSugerencias local={local} categorias={categorias} unidades={opcUnidades} almacenId={sel.actual.id} />
       </>
     )
   }

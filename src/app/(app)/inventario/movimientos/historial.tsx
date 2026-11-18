@@ -9,7 +9,6 @@ import { NOMBRE_TIPO, TIPOS_DE, TIPOS_FILTRO, type Sentido } from '@/lib/movimie
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, FiltroFechas, Pagination, EmptyState, LinkButton, Badge } from '@/components/ui'
 import { Select } from '@/components/select'
 import { AnularConMotivo } from '@/components/anular-con-motivo'
-import { ExportButton } from '@/components/export-button'
 import { anularMovimiento } from './actions'
 
 /** Historial de Entradas o de Salidas del almacén elegido arriba, cada uno con su numeración propia. */
@@ -42,14 +41,7 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
 
   return (
     <>
-      <PageHeader title={titulo} actions={<>
-          {/* el cuadro que pide el Sr. Vladimir: cada compra con su fecha, factura, marca, cantidad, precio y total */}
-          {entrada && <ExportButton label="Excel de compras" filename={`compras_${desde}_${hasta}`} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
-            filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local?.id : undefined, fuera_de_catalogo: 'false' }}
-            columns={{ fecha_ingreso: 'Fecha de entrada', almacen: 'Almacén', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
-              codigo_almacen: 'Cód.', producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unitario', total: 'Total' }} />}
-          {nueva}
-        </>} />
+      <PageHeader title={titulo} actions={nueva} />
       <FilterBar>
         <FilterField label="Tipo"><Select name="tipo" options={TIPOS_FILTRO[sentido].map((c) => ({ id: c, nombre: NOMBRE_TIPO[c] }))} defaultValue={tipo} placeholder="Todos" /></FilterField>
         <FiltroFechas desde={desde} hasta={hasta} />
@@ -94,7 +86,7 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title={`Sin ${titulo.toLowerCase()} en el periodo`} action={nueva} />}
+        ) : <EmptyState title={`Sin ${titulo.toLowerCase()} en el periodo`} />}
       </Section>
     </>
   )

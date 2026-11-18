@@ -1,6 +1,6 @@
 /** Cantidades de filas que el usuario puede elegir en cualquier tabla */
 export const TAMANOS_PAGINA = [5, 10, 25, 50, 100, 200, 500] as const
-export const TAMANO_DEFECTO = 5
+export const TAMANO_DEFECTO = 25
 
 /**
  * Lee ?page=&size= (o con prefijo, para páginas con varias tablas: ?c_page=&c_size=)

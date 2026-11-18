@@ -49,7 +49,7 @@ async function Vencimientos({ supabase, local, almacen, estado }: { supabase: Cl
       <FilterBar>
         <FilterField label="Estado"><Select name="estado" defaultValue={estado} placeholder="Todos" options={[{ id: 'vencido', nombre: 'Vencido' }, { id: 'por_vencer', nombre: 'Por vencer' }, { id: 'vigente', nombre: 'Vigente' }]} /></FilterField>
       </FilterBar>
-      <Section icon={CalendarClock} title="Vencimientos" bodyClassName="p-0" stats={[{ label: 'Registros', value: filas.length }]}>
+      <Section icon={CalendarClock} title="Productos con fecha de vencimiento" bodyClassName="p-0" stats={[{ label: 'Registros', value: filas.length }]}>
         {filas.length ? (
           <Table>
             <thead><tr><Th right>Cód.</Th><Th>Producto</Th>{!almacen && <Th>Almacén</Th>}<Th>Vence</Th><Th right>Días</Th><Th right>Aviso</Th><Th right>Cantidad</Th><Th>Estado</Th></tr></thead>
@@ -66,7 +66,7 @@ async function Vencimientos({ supabase, local, almacen, estado }: { supabase: Cl
               </tr>
             ))}</tbody>
           </Table>
-        ) : <EmptyState title="Sin fechas de vencimiento" description="La fecha se escribe al registrar cada entrada (o en la ficha del producto)." />}
+        ) : <EmptyState title="Sin fechas de vencimiento" description="La fecha se escribe en cada entrada o en el stock inicial." />}
       </Section>
     </>
   )

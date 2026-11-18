@@ -47,12 +47,11 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
         <input type="hidden" name="tipo" value={tipo} />
         {motivo && <input type="hidden" name="motivo" value={motivo} />}
         <input type="hidden" name="almacen" value={sel.actual.id} />
-        <Section title="Productos y datos">
-          {/* orden estándar: tipo → productos → datos → observación (el tipo va primero: al cambiarlo se recarga el formulario) */}
-          <div className="grid gap-4 md:grid-cols-3">{tabs}</div>
-          <div className="mt-5"><LineasEntradaSalida almacenId={sel.actual.id} entrada={entrada} /></div>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <label><span className="label">Fecha y hora</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
+        {/* como se trabaja: primero quién y para qué (área, quien recibe), luego se despachan los productos */}
+        <Section title={entrada ? 'Datos de la entrada' : 'Datos de la salida'}>
+          {/* el tipo va primero: al cambiarlo se recarga el formulario */}
+          <div className="mb-5 max-w-xs">{tabs}</div>
+          <div className="grid gap-4 md:grid-cols-3">
             {conArea && (
               <div><span className="label">Área destino <span className="req">*</span></span>
                 <ComboInput name="area" opciones={areas ?? []} placeholder="Elija o escriba el área" /></div>
@@ -63,8 +62,12 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
             {tipo === 'devolucion_proveedor' && (
               <label><span className="label">Documento</span><input name="documento" className="field" placeholder="Guía, nota de crédito…" /></label>
             )}
+            <label><span className="label">Fecha y hora</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
           </div>
-          <label className="mt-4 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span>
+        </Section>
+        <Section title="Productos">
+          <LineasEntradaSalida almacenId={sel.actual.id} entrada={entrada} />
+          <label className="mt-6 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span>
             <input name="observacion" className="field" placeholder={tipo === 'merma' ? 'Vencido, malogrado, roto…' : ''} /></label>
         </Section>
         <div className="flex justify-end">

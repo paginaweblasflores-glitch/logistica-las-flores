@@ -88,7 +88,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
     getCategorias(),
     // el resumen por negocio solo lo usa la vista de Logística
     almacen ? Promise.resolve({ data: null }) : supabase.rpc('fn_resumen_productos'),
-    // cuántos productos del almacén aún no tienen su cantidad puesta (entrada «Producto nuevo»)
+    // cuántos productos del almacén aún no tienen su cantidad puesta (entrada «Stock inicial»)
     enAlmacen ? supabase.from('producto_almacen').select('producto_id', { count: 'exact', head: true }).eq('almacen_id', sel.id!) : Promise.resolve({ count: 0 }),
     enAlmacen ? supabase.from('stock').select('producto_id', { count: 'exact', head: true }).eq('almacen_id', sel.id!) : Promise.resolve({ count: 0 }),
   ])
@@ -113,13 +113,12 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader title={almacen ? (sel.actual && sel.lista.length > 1 ? `Catálogo · ${sel.actual.corto}` : 'Catálogo de mi almacén') : 'Catálogo'}
-        description={almacen
-          ? consulta
-            ? 'Vista de todos sus almacenes (solo consulta). Para registrar productos o cantidades, elija arriba el almacén.'
-            : 'Productos de este almacén con su propio código. Haga clic en un producto para ver o cambiar sus datos.'
-          : 'Catálogo único de productos. Cada producto se marca en el negocio donde se usa; el stock de cada negocio es independiente.'}
         actions={<>
-          <ExportButton filename="productos" table="producto" order="nombre" columns={{ codigo: 'Código', nombre: 'Nombre', marca: 'Marca', costo_referencia: 'Último precio de compra', activo: 'Activo' }} />
+          {/* el catálogo del almacén elegido (o de todos sus almacenes con «Todos»), con su código en cada almacén */}
+          <ExportButton filename={`catalogo_${(sel.actual?.corto ?? local?.codigo ?? 'todos').replace(/\W+/g, '_')}`} table="v_catalogo_almacen" order="codigo_almacen"
+            filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local?.id : undefined, activo: 'true' }}
+            columns={{ ...(sel.id ? {} : { almacen: 'Almacén' }), codigo_almacen: 'Cód.', nombre: 'Producto', categoria: 'Categoría', unidad: 'Unidad', marca: 'Marca',
+              costo_referencia: 'Último precio', stock_inicial: 'Stock inicial' }} />
           {almacen && !consulta && <LinkButton href="/productos/nuevo"><Plus className="size-4" /> Nuevo producto</LinkButton>}
         </>} />
       {!almacen && sin > 0 && !sinNegocio && (

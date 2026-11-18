@@ -19,7 +19,7 @@ export const TIPOS_MANUALES: Record<Sentido, { codigo: string; nombre: string; a
 
 /** Nombre corto de cada tipo en los historiales */
 export const NOMBRE_TIPO: Record<string, string> = {
-  stock_inicial: 'Producto nuevo',
+  stock_inicial: 'Stock inicial',
   entrada_compra: 'Compra',
   entrada_devolucion: 'Devolución de un área',
   ajuste_positivo: 'Sobrante',
@@ -35,7 +35,7 @@ export const NOMBRE_TIPO: Record<string, string> = {
 /** Tipos que se ofrecen en el filtro «Tipo» de cada historial (la devolución de un área ya no se usa en el almacén) */
 export const TIPOS_FILTRO: Record<Sentido, string[]> = {
   entrada: ['entrada_compra', 'ajuste_positivo', 'traslado_entrada', 'stock_inicial'],
-  salida: ['salida_consumo', 'merma', 'devolucion_proveedor', 'ajuste_negativo', 'traslado_salida', 'salida_venta'],
+  salida: ['salida_consumo', 'merma', 'devolucion_proveedor', 'ajuste_negativo', 'traslado_salida'],
 }
 
 /** Tipos de cada historial (incluye los que vienen de compras, traspasos y conteos) */

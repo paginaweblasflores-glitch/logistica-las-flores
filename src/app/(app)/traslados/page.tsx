@@ -24,13 +24,16 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
     .select(`id, numero, fecha, estado, motivo, recibido_at, local_origen_id, local_destino_id,
              origen:almacen_origen_id(nombre, local:local_id(codigo)), destino:almacen_destino_id(nombre, local:local_id(codigo)),
              recibe, traslado_detalle(count)`, { count: 'exact' })
-  if (local && vista === 'enviados') q = q.eq('local_origen_id', local.id)
+  if (local && vista === 'por_recibir') q = q.eq('local_destino_id', local.id).eq('estado', 'pendiente')
+  else if (local && vista === 'enviados') q = q.eq('local_origen_id', local.id)
   else if (local && vista === 'recibidos') q = q.eq('local_destino_id', local.id).neq('estado', 'pendiente')
   else if (local) q = q.or(`local_origen_id.eq.${local.id},local_destino_id.eq.${local.id}`)
   // en «Todos», lo pendiente por recibir aparece siempre (aunque sea de antes del periodo)
-  if (local && vista === 'todos') q = q.or(`and(fecha.gte.${ini},fecha.lte.${fin}),and(estado.eq.pendiente,local_destino_id.eq.${local.id})`)
+  if (vista === 'por_recibir') { /* todo lo pendiente, sin importar la fecha */ }
+  else if (local && vista === 'todos') q = q.or(`and(fecha.gte.${ini},fecha.lte.${fin}),and(estado.eq.pendiente,local_destino_id.eq.${local.id})`)
   else q = q.gte('fecha', ini).lte('fecha', fin)
-  if (sel.id && sel.lista.length > 1) q = q.or(`almacen_origen_id.eq.${sel.id},almacen_destino_id.eq.${sel.id}`)   // solo los del almacén elegido
+  // solo los del almacén elegido (por recibir: los que llegan a él)
+  if (sel.id && sel.lista.length > 1) q = vista === 'por_recibir' ? q.eq('almacen_destino_id', sel.id) : q.or(`almacen_origen_id.eq.${sel.id},almacen_destino_id.eq.${sel.id}`)
   // la lista y los pendientes por recibir (para el aviso del almacén), al mismo tiempo
   const [{ data, count }, { count: pendientes }] = await Promise.all([
     q.order('fecha', { ascending: false }).range(from, to),
@@ -42,7 +45,7 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
     local_origen_id: string; local_destino_id: string
     origen: { nombre: string; local: { codigo: string } }; destino: { nombre: string; local: { codigo: string } }
     recibe: string | null; traslado_detalle: { count: number }[] }
-  const tipos = [{ id: 'todos', nombre: 'Todos' }, { id: 'enviados', nombre: 'Enviados' }, { id: 'recibidos', nombre: 'Recibidos' }]
+  const tipos = [{ id: 'todos', nombre: 'Todos' }, { id: 'por_recibir', nombre: 'Por recibir' }, { id: 'enviados', nombre: 'Enviados' }, { id: 'recibidos', nombre: 'Recibidos' }]
 
   return (
     <>
@@ -82,8 +85,7 @@ export default async function TrasladosPage({ searchParams }: { searchParams: Pr
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title={'Sin traspasos en el periodo'}
-              action={panel === 'almacen' && !soloConsulta(sel) ? <LinkButton href="/traslados/nuevo">Enviar un traspaso</LinkButton> : undefined} />}
+        ) : <EmptyState title={vista === 'por_recibir' ? 'No tiene traspasos por recibir' : 'Sin traspasos en el periodo'} />}
       </Section>
     </>
   )

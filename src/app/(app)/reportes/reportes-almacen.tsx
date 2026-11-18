@@ -4,6 +4,7 @@ import { ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, PackagePlus } from 'l
 import { createClient } from '@/lib/supabase/server'
 import type { Local } from '@/lib/session'
 import { fmtDate, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
+import { TIPOS_DE } from '@/lib/movimientos'
 import { sp, cn } from '@/lib/utils'
 import { PageHeader, Section, Th, Td, FilterBar, FiltroFechas, EmptyState } from '@/components/ui'
 import { PagedTable } from '@/components/pager'
@@ -31,9 +32,16 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
     supabase.rpc('fn_productos_nuevos', { p_local: local.id, p_desde: desde, p_hasta: hasta }),
   ])
   const ls = (lineas ?? []) as Linea[]
+  // los tipos de cada tarjeta (pantalla y Excel usan los mismos): entradas y salidas sin los traspasos, que van aparte
+  const TIPOS = {
+    entradas: TIPOS_DE.entrada.filter((t) => t !== 'traslado_entrada'),
+    salidas: TIPOS_DE.salida.filter((t) => t !== 'traslado_salida'),
+    enviados: ['traslado_salida'],
+    recibidos: ['traslado_entrada'],
+  }
   const grupos = {
-    entradas: ls.filter((l) => l.entrada !== null && l.tipo !== 'traslado_entrada'),
-    salidas: ls.filter((l) => l.salida !== null && l.tipo !== 'traslado_salida'),
+    entradas: ls.filter((l) => TIPOS.entradas.includes(l.tipo)),
+    salidas: ls.filter((l) => TIPOS.salidas.includes(l.tipo)),
     enviados: ls.filter((l) => l.tipo === 'traslado_salida'),
     recibidos: ls.filter((l) => l.tipo === 'traslado_entrada'),
   }
@@ -43,7 +51,7 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
 
   const tarjetas = [
     { id: 'entradas', titulo: 'Entradas', icon: ArrowDownToLine, nota: 'Compras recibidas, stock inicial, devoluciones y ajustes', ...suma(grupos.entradas) },
-    { id: 'salidas', titulo: 'Salidas', icon: ArrowUpFromLine, nota: 'Consumo de áreas, ventas, mermas y ajustes', ...suma(grupos.salidas) },
+    { id: 'salidas', titulo: 'Salidas', icon: ArrowUpFromLine, nota: 'Salidas a áreas, mermas, devoluciones y faltantes', ...suma(grupos.salidas) },
     { id: 'enviados', titulo: 'Traspasos enviados', icon: ArrowLeftRight, nota: 'Salieron hacia otro almacén', ...suma(grupos.enviados) },
     { id: 'recibidos', titulo: 'Traspasos recibidos', icon: ArrowLeftRight, nota: 'Entraron desde otro almacén (incluye devoluciones)', ...suma(grupos.recibidos) },
     { id: 'nuevos', titulo: 'Productos nuevos', icon: PackagePlus, nota: 'Primer movimiento en su almacén', lineas: nv.length, unidades: null, valor: null },
@@ -54,7 +62,14 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
 
   return (
     <>
-      <PageHeader title="Reportes del almacén" description={`Movimientos de ${local.nombre} del ${fmtDate(desde)} al ${fmtDate(hasta)}.`} />
+      <PageHeader title={`Reportes${sel.actual ? ` · ${sel.actual.corto}` : ''}`}
+        actions={
+          // el cuadro que pide el Sr. Vladimir: cada compra con su fecha, comprobante, marca, cantidad, precio y total
+          <ExportButton label="Excel de compras" filename={`compras_${desde}_${hasta}`} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
+            filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local.id : undefined, fuera_de_catalogo: 'false' }}
+            columns={{ fecha_ingreso: 'Fecha de entrada', almacen: 'Almacén', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
+              codigo_almacen: 'Cód.', producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unitario', total: 'Total' }} />
+        } />
       <FilterBar>
         <input type="hidden" name="ver" value={ver} />
         <FiltroFechas desde={desde} hasta={hasta} />
@@ -75,9 +90,10 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
       </div>
 
       <Section title={`Detalle: ${actual.titulo}`} bodyClassName="p-0"
-        actions={detalle ? <ExportButton filename={`almacen_${local.codigo}_${actual.id}_${desde}_${hasta}`} table="v_movimiento_linea" columns={COLS}
+        actions={detalle ? <ExportButton label="Excel del detalle" filename={`almacen_${local.codigo}_${actual.id}_${desde}_${hasta}`} table="v_movimiento_linea" columns={COLS}
           dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
-          filters={{ local_id: local.id, ...(actual.id === 'enviados' ? { tipo: 'traslado_salida' } : actual.id === 'recibidos' ? { tipo: 'traslado_entrada' } : actual.id === 'entradas' ? { signo: '1' } : { signo: '-1' }) }} /> : undefined}>
+          // lo mismo que la tarjeta: el almacén elegido (o todos los del negocio) y los tipos de esa tarjeta
+          filters={{ local_id: local.id, almacen_id: sel.id ?? undefined, tipo: TIPOS[actual.id as keyof typeof TIPOS] }} /> : undefined}>
         {detalle ? (
           detalle.length ? (
             <PagedTable head={<tr><Th>Fecha</Th><Th>Tipo</Th><Th>Producto</Th><Th right>Cantidad</Th><Th right>Importe</Th><Th>Documento / motivo</Th></tr>}>

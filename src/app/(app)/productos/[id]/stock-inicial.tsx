@@ -5,7 +5,7 @@ import { SubmitButton } from '@/components/submit-button'
 import { registrarStockInicial } from '../actions'
 
 /**
- * Stock inicial del producto en el almacén elegido: se pone UNA sola vez (entrada «Producto nuevo», queda en el Kardex).
+ * Stock inicial del producto en el almacén elegido: se pone UNA sola vez (entrada «Stock inicial», queda en el Kardex).
  * Después la cantidad cambia solo con Entradas, Salidas y Traspasos; este recuadro ya no aparece.
  */
 export function StockInicial({ productoId, almacenId, almacen, unidad }: { productoId: string; almacenId: string; almacen: string; unidad: string }) {

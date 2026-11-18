@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Boxes, ChevronRight, ClipboardList, PackageCheck, PackageX, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import type { Local } from '@/lib/session'
-import { etiquetaNegocio } from '@/lib/empresa'
 import { fmtDate, fmtQty, fmtSoles, inicioMes } from '@/lib/format'
 import { PageHeader, Section, Stat, Table, Th, Td, Badge, EmptyState } from '@/components/ui'
 import { ProductoFoto } from '@/components/producto-foto'
@@ -17,7 +16,9 @@ export async function PanelAlmacen({ local }: { local: Local }) {
   // almacén elegido arriba (Todos · Almacén 01 · Almacén 02 — Cocina): todo el inicio muestra solo ese
   const sel = await getAlmacenActivo()
   const solo = sel.id ? { almacen_id: sel.id } : {}
-  const [stock, porRecibir, enviados, compras, reqs, movs, ingresos, almacenes] = await Promise.all([
+  // almacenes que se muestran (el elegido o todos los del responsable): ya vienen con la sesión
+  const ids = sel.id ? [sel.id] : sel.lista.map((a) => a.id)
+  const [stock, porRecibir, enviados, compras, reqs, movs, ingresos, almacenes, enCatalogo, conStockInicial] = await Promise.all([
     supabase.from('v_stock').select('producto_id, almacen_id, nombre, imagen_url, cantidad, unidad, valor, stock_minimo, estado').eq('local_id', local.id).match(solo).limit(5000),
     supabase.from('traslado').select('id, numero, fecha, origen:almacen_origen_id(nombre), traslado_detalle(count)').eq('local_destino_id', local.id).match(sel.id ? { almacen_destino_id: sel.id } : {}).eq('estado', 'pendiente').order('fecha'),
     supabase.from('traslado').select('id', { count: 'exact', head: true }).eq('local_origen_id', local.id).match(sel.id ? { almacen_origen_id: sel.id } : {}).eq('estado', 'pendiente'),
@@ -29,13 +30,19 @@ export async function PanelAlmacen({ local }: { local: Local }) {
     supabase.from('v_ingreso_almacen').select('compra_id, almacen_id, total').eq('local_id', local.id).match(solo).eq('fuera_de_catalogo', false).gte('fecha_ingreso', inicioMes()).limit(5000),
     // los almacenes que maneja el responsable (Las Flores: Almacén 01 y Almacén 02 — Cocina)
     getAlmacenes(local.id, ['almacen']),
+    // catálogo del almacén y cuántos ya tienen su stock inicial (fila de stock): la diferencia está por registrar
+    supabase.from('producto_almacen').select('producto_id', { count: 'exact', head: true }).in('almacen_id', ids),
+    supabase.from('stock').select('producto_id', { count: 'exact', head: true }).in('almacen_id', ids),
   ])
+  const catalogo = enCatalogo.count ?? 0
+  const stockInicialPendiente = Math.max(0, catalogo - (conStockInicial.count ?? 0))
 
   type S = { producto_id: string; almacen_id: string; nombre: string; imagen_url: string | null; cantidad: number; unidad: string; valor: number; stock_minimo: number | null; estado: string }
   const st = (stock.data ?? []) as S[]
   const conStock = st.filter((s) => Number(s.cantidad) > 0)
-  const porReponer = st.filter((s) => s.estado === 'critico' && Number(s.stock_minimo) > 0)
-  const sinStock = st.filter((s) => s.estado === 'agotado' && Number(s.stock_minimo) > 0)
+  // por reponer: llegaron a su mínimo o se agotaron (con mínimo definido); primero los agotados
+  const porReponer = st.filter((s) => (s.estado === 'agotado' || s.estado === 'critico') && Number(s.stock_minimo) > 0)
+    .sort((a, b) => Number(b.estado === 'agotado') - Number(a.estado === 'agotado'))
   const ing = (ingresos.data ?? []) as { compra_id: string; almacen_id: string; total: number }[]
   const ingresosMes = ing.reduce((a, r) => a + Number(r.total), 0)
   const comprobantesMes = new Set(ing.map((r) => r.compra_id)).size
@@ -54,26 +61,26 @@ export async function PanelAlmacen({ local }: { local: Local }) {
   type M = { id: string; numero: number; nro: string | null; fecha: string; tipo: string; documento: string | null; observacion: string | null; almacen: { nombre: string }; tipo_mov: { nombre: string; signo: number }; movimiento_detalle: { count: number }[] }
   const ultimos = (movs.data ?? []) as unknown as M[]
 
+  // lo que llega (traspasos y compras) se lista en «Por recibir»; aquí, el resto de pendientes
   const tareas = [
-    { label: 'Traspasos por recibir', value: pendientesRecibir.length, href: '/traslados' },
-    { label: 'Compras por recibir', value: comprasRecibir.length, href: '/entradas/nueva?tipo=compra' },
+    // mientras haya productos sin su cantidad inicial (desaparece cuando todos la tienen)
+    ...(stockInicialPendiente ? [{ label: 'Stock inicial por registrar', value: stockInicialPendiente, href: '/productos' }] : []),
     { label: 'Traspasos enviados sin recibir', value: enviados.count ?? 0, href: '/traslados?ver=enviados' },
     { label: 'Requerimientos en trámite', value: reqs.count ?? 0, href: '/requerimientos' },
   ]
 
   return (
     <>
-      <PageHeader title={sel.actual && sel.lista.length > 1 ? sel.actual.corto : `Almacén ${local.codigo === 'UM' ? 'Hotel Umaru' : 'Restaurante Las Flores'}`}
-        description={etiquetaNegocio(local)} />
+      <PageHeader title={sel.actual && sel.lista.length > 1 ? sel.actual.corto : `Almacén ${local.codigo === 'UM' ? 'Hotel Umaru' : 'Restaurante Las Flores'}`} />
 
       <AvisoStockDia />
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Stat label="Productos con stock" value={new Set(conStock.map((s) => s.producto_id)).size}
-              hint={porAlmacen.length > 1 && !sel.id ? 'Sin repetir los que están en los dos almacenes' : `${st.length} en su inventario`} />
+              hint={`de ${catalogo} en su catálogo`} />
         <Stat label="Ingresos del mes" value={fmtSoles(ingresosMes)} hint={`${comprobantesMes} ${comprobantesMes === 1 ? 'comprobante' : 'comprobantes'} registrados`} />
         <Stat label="Valor del stock" value={fmtSoles(valor)} hint="Solo productos con costo" />
-        <Stat label="Por reponer" value={porReponer.length} tone={porReponer.length ? 'warn' : 'default'} hint="Llegaron a su stock mínimo" />
-        <Stat label="Sin stock" value={sinStock.length} tone={sinStock.length ? 'bad' : 'default'} hint="Agotados con mínimo definido" />
+        <Stat label="Por reponer" value={porReponer.length} tone={porReponer.some((s) => s.estado === 'agotado') ? 'bad' : porReponer.length ? 'warn' : 'default'}
+              hint="En su mínimo o agotados" />
       </div>
 
       {porAlmacen.length > 1 && !sel.id && (
@@ -150,10 +157,10 @@ export async function PanelAlmacen({ local }: { local: Local }) {
         </Section>
 
         <Section icon={PackageX} title="Por reponer" bodyClassName="p-3"
-          actions={<Link href="/inventario?alerta=1" className="text-xs enlace">Ver todos ({porReponer.length + sinStock.length})</Link>}>
-          {porReponer.length + sinStock.length ? (
+          actions={<Link href="/inventario?alerta=1" className="text-xs enlace">Ver todos ({porReponer.length})</Link>}>
+          {porReponer.length ? (
             <ul className="divide-y divide-line text-sm">
-              {[...sinStock, ...porReponer].slice(0, 6).map((s) => (
+              {porReponer.slice(0, 6).map((s) => (
                 <li key={s.producto_id}><Link href={`/productos/${s.producto_id}`} className="flex items-center gap-3 px-2 py-2 hover:bg-canvas">
                   <ProductoFoto src={s.imagen_url} alt={s.nombre} />
                   <span className="min-w-0 flex-1 truncate font-medium">{s.nombre}</span>

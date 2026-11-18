@@ -12,8 +12,7 @@ export async function NuevoRequerimientoAlmacen() {
   if (soloConsulta(sel) || !sel.actual) return <ElegirAlmacen titulo="Nuevo requerimiento" volver={{ href: '/requerimientos', label: 'Requerimientos' }} />
   return (
     <>
-      <PageHeader title={`Nuevo requerimiento · ${sel.actual.corto}`} back={{ href: '/requerimientos', label: 'Requerimientos' }}
-        description="La lista de productos que necesita su almacén." />
+      <PageHeader title={`Nuevo requerimiento · ${sel.actual.corto}`} back={{ href: '/requerimientos', label: 'Requerimientos' }} />
       <ActionForm action={crearRequerimientoAlmacen} className="space-y-5">
         <input type="hidden" name="almacen" value={sel.actual.id} />
         {/* todo el requerimiento en una sola tarjeta: los productos y, debajo, para cuándo y la observación */}
@@ -21,7 +20,7 @@ export async function NuevoRequerimientoAlmacen() {
           <LineasRequerimientoAlmacen almacenId={sel.actual.id} />
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label><span className="label">¿Para cuándo lo necesita? <span className="font-normal normal-case text-subtle">(opcional)</span></span><input type="date" name="fecha_requerida" className="field" /></label>
-            <label className="md:col-span-2"><span className="label">Observación</span><input name="observacion" className="field" /></label>
+            <label className="md:col-span-2"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
           </div>
         </Section>
         <div className="flex justify-end"><SubmitButton confirm="¿Enviar el requerimiento a Logística?">Enviar a Logística</SubmitButton></div>

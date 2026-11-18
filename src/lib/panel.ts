@@ -24,7 +24,7 @@ const SOLO_LOGISTICA = [
   '/configuracion', '/compras/nueva', '/almacenes',
 ]
 /** Rutas de registro que solo abre el almacén (Logística solo consulta). */
-const SOLO_ALMACEN = ['/inventario/movimientos/nuevo', '/entradas/nueva', '/salidas/nueva', '/traslados/nuevo', '/ingresos/nuevo', '/productos']   // el catálogo es de los almacenes
+const SOLO_ALMACEN = ['/entradas/nueva', '/salidas/nueva', '/traslados/nuevo', '/ingresos/nuevo', '/productos']   // el catálogo es de los almacenes
 
 const coincide = (path: string, base: string) => path === base || path.startsWith(base + '/')
 

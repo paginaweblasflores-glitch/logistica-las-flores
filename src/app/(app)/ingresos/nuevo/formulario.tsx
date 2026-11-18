@@ -80,7 +80,7 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
         <AvisoStockDia compacto />
         {lista}
         <Section title="Productos que llegaron y datos de la boleta">
-          <div className="mb-5 grid gap-4 md:grid-cols-4">{tabs}</div>
+          <div className="mb-5 max-w-xs">{tabs}</div>
           <LlegadaCompra compraId={elegida.id} lineas={lineas} almacenId={almId} proveedores={proveedores} proveedorId={elegida.proveedor_id} />
         </Section>
       </>
@@ -95,24 +95,30 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
         <AvisoStockDia compacto />
       {lista}
       <ActionForm action={registrarIngreso} className="space-y-5">
-        <Section title="Productos que ingresaron y datos de la boleta">
-          {/* orden estándar: tipo → productos → datos → observación */}
-          <div className="grid gap-4 md:grid-cols-4">{tabs}</div>
-          <div className="mt-5 space-y-3">
-            <IngresoLineas almacenId={sel.id} />
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
+        {/* como se trabaja con la boleta en la mano: primero quién la emite y su número, luego se copian los productos */}
+        <Section title="Datos de la boleta">
+          <div className="mb-5 max-w-xs">{tabs}</div>
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="md:col-span-2"><span className="label">Proveedor</span><ProveedorPicker name="proveedor" proveedores={proveedores} placeholder="Escriba para buscar: distraroj, backus…" /></div>
-            {sel.actual
-              ? <div><span className="label">Almacén</span><input type="hidden" name="almacen" value={sel.actual.id} /><p className="field flex items-center bg-canvas font-semibold">{sel.actual.corto}</p></div>
-              : <label><span className="label">Almacén <span className="req">*</span></span><Select name="almacen" options={almacenes} defaultValue={principal?.id} required /></label>}
-            <label><span className="label">Fecha y hora de ingreso</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
             <label><span className="label">Comprobante</span>
               <Select name="tipo_documento" options={COMPROBANTES} defaultValue="boleta" required /></label>
             <label><span className="label">N° del comprobante</span><input name="numero_documento" className="field" placeholder="B001-000123" /></label>
-            <TotalComprobante />
+            <label><span className="label">Fecha y hora de ingreso</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
+            {/* el almacén es el elegido en el menú (ya lo dice el título) */}
+            {sel.actual
+              ? <input type="hidden" name="almacen" value={sel.actual.id} />
+              : <label><span className="label">Almacén <span className="req">*</span></span><Select name="almacen" options={almacenes} defaultValue={principal?.id} required /></label>}
           </div>
-          <label className="mt-4 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
+        </Section>
+        <Section title="Productos">
+          <div className="space-y-3">
+            <IngresoLineas almacenId={sel.id} />
+          </div>
+          {/* al final: el total de la boleta, para comparar con la suma de los productos */}
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <TotalComprobante />
+            <label className="md:col-span-3"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
+          </div>
         </Section>
         <div className="flex justify-end"><SubmitButton confirm="¿Registrar la compra? Los productos se sumarán al stock del almacén.">Registrar entrada</SubmitButton></div>
       </ActionForm>

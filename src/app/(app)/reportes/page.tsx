@@ -11,7 +11,7 @@ import { Bars } from '@/components/charts'
 import { ReportExport, type Hoja } from '@/components/report-export'
 import { PagedTable } from '@/components/pager'
 
-export const metadata = { title: 'Reportes e indicadores' }
+export const metadata = { title: 'Reportes' }
 
 type Comp = { local_id: string; local_codigo: string; local_nombre: string; valor_stock: number; compras: number; transporte: number; ahorro: number
   consumo_valor: number; diferencia_inventario: number; pct_diferencia: number | null; descuentos: number; roturas: number; otif: number | null; requerimientos: number }

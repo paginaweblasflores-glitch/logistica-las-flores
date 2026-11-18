@@ -84,7 +84,7 @@ export function rutaActiva(pathname: string, href: string) {
  * En el resto (fichas de detalle, formularios, maestros, configuración) se oculta para no confundir.
  */
 export const RUTAS_CON_AMBITO = new Set([
-  '/', '/inventario', '/inventario/kardex', '/inventario/movimientos', '/inventario/lotes', '/entradas', '/salidas', '/almacenes',
+  '/', '/inventario', '/inventario/kardex', '/inventario/lotes', '/entradas', '/salidas', '/almacenes',
   '/traslados',
   '/requerimientos', '/cotizaciones', '/compras', '/transporte', '/ingresos',
   '/reportes', '/productos',

@@ -19,7 +19,8 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
   filename: string
   table: string
   columns: Record<string, string>
-  filters?: Record<string, string | null | undefined>
+  /** un valor: igual a; una lista: cualquiera de esos valores */
+  filters?: Record<string, string | string[] | null | undefined>
   dateColumn?: string
   desde?: string
   hasta?: string
@@ -34,7 +35,10 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
       const rows: Record<string, unknown>[] = []
       for (let from = 0; ; from += 1000) {
         let q = supabase.from(table).select(Object.keys(columns).join(','))
-        for (const [k, v] of Object.entries(filters)) if (v) q = q.eq(k, v)
+        for (const [k, v] of Object.entries(filters)) {
+          if (Array.isArray(v)) q = q.in(k, v)
+          else if (v) q = q.eq(k, v)
+        }
         if (dateColumn && desde) q = q.gte(dateColumn, desde)
         if (dateColumn && hasta) q = q.lte(dateColumn, `${hasta}T23:59:59`)
         if (order) q = q.order(order, { ascending: !desc })

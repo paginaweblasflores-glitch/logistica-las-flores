@@ -2,31 +2,25 @@ import Link from 'next/link'
 import { Boxes, ScrollText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo } from '@/lib/session'
-import { getAlmacenes } from '@/lib/queries'
+import { getAlmacenes, getCategorias } from '@/lib/queries'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
-import { PageHeader, Section, Table, Th, Td, EstadoBadge, FilterBar, FilterField, Pagination, EmptyState, LocalBadge, Note } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, EstadoBadge, FilterBar, FilterField, Pagination, EmptyState, LocalBadge, Note, LinkButton } from '@/components/ui'
 import { ProductoFoto } from '@/components/producto-foto'
 import { Select } from '@/components/select'
 
-export const metadata = { title: 'Stock' }
+export const metadata = { title: 'Stock actual' }
 
-const TIPOS = [
-  { id: 'insumo', nombre: 'Insumos' }, { id: 'bebida', nombre: 'Bebidas' }, { id: 'carne', nombre: 'Carnes' },
-  { id: 'limpieza', nombre: 'Limpieza' }, { id: 'suministro', nombre: 'Suministros' }, { id: 'utensilio', nombre: 'Utensilios' },
-  { id: 'activo', nombre: 'Activos / vajilla' },
-]
-const ESTADOS = [{ id: 'critico', nombre: 'Crítico' }, { id: 'agotado', nombre: 'Agotado' }, { id: 'exceso', nombre: 'Exceso' }, { id: 'normal', nombre: 'Normal' }]
+// un solo filtro de estado (antes «Estado» y «Mostrar» por separado; «Exceso» dependía del stock máximo, que ya no se pide)
+const ESTADOS = [{ id: 'con_stock', nombre: 'Con stock' }, { id: 'critico', nombre: 'Por reponer' }, { id: 'agotado', nombre: 'Agotado' }, { id: 'normal', nombre: 'Normal' }]
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   // sesión (una sola llamada cacheada): negocio, panel y almacén elegido arriba
   const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
   const { from, to } = paginar(params)
-  const q = sp(params, 'q'), almacen = sp(params, 'almacen') || sel.id || '', estado = sp(params, 'estado'), tipo = sp(params, 'tipo')
-  // «mostrar»: por defecto todos (también los agotados); el nombre viejo «con_stock» ya no se usa (direcciones guardadas)
-  const mostrar = sp(params, 'mostrar', 'todos')
+  const q = sp(params, 'q'), almacen = sp(params, 'almacen') || sel.id || '', estado = sp(params, 'estado'), categoria = sp(params, 'categoria')
   // costo y valor del inventario: solo Logística. El almacén trabaja con cantidades; sus precios reales están en Entradas
   const conCosto = panel !== 'almacen'
 
@@ -36,15 +30,17 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   if (almacen) query = query.eq('almacen_id', almacen)
   const alerta = sp(params, 'alerta') === '1'   // desde la campanita: por acabarse + agotados con mínimo
   if (alerta && !estado) query = query.in('estado', ['critico', 'agotado']).gt('stock_minimo', 0)
+  else if (estado === 'con_stock') query = query.gt('cantidad', 0)
   else if (estado) query = query.eq('estado', estado)
-  if (tipo) query = query.eq('producto_tipo', tipo)
+  // la misma categoría que en el Catálogo
+  if (categoria) query = query.eq('categoria', categoria)
   if (q) query = query.or(`nombre.ilike.%${q.replace(/[,()]/g, ' ')}%,codigo.ilike.%${q.replace(/[,()]/g, ' ')}%`)
-  if (mostrar === 'con_stock' && !estado && !alerta) query = query.neq('cantidad', 0)
   // la lista, los totales (agregados en la base, sin descargar filas) y los almacenes: al mismo tiempo
-  const [{ data, count }, { data: tot }, almacenes] = await Promise.all([
+  const [{ data, count }, { data: tot }, almacenes, categorias] = await Promise.all([
     query.order('nombre').range(from, to),
-    supabase.rpc('fn_stock_totales', { p_local: local?.id ?? null, p_almacen: almacen || null, p_tipo: tipo || null }),
+    supabase.rpc('fn_stock_totales', { p_local: local?.id ?? null, p_almacen: almacen || null, p_tipo: null }),
     getAlmacenes(local?.id),
+    getCategorias(),
   ])
   const valor = Number(tot?.[0]?.valor ?? 0)
   const criticos = Number(tot?.[0]?.criticos ?? 0)
@@ -56,7 +52,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   return (
     <>
       {/* entradas y salidas se registran en sus propios módulos */}
-      <PageHeader title="Stock por almacén" />
+      <PageHeader title={`Stock actual${sel.actual ? ` · ${sel.actual.corto}` : ''}`} />
 
       {alerta && !estado && (
         <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto (haga clic en su nombre). <Link href="/inventario" className="enlace">Ver todo el stock</Link></Note></div>
@@ -65,9 +61,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         {alerta && <input type="hidden" name="alerta" value="1" />}
         <FilterField label="Buscar" className="min-w-60"><input name="q" defaultValue={q} placeholder="Nombre o código" className="field" /></FilterField>
         {!sel.lista.length && <FilterField label="Almacén"><Select name="almacen" options={almacenes} defaultValue={almacen} placeholder="Todos" /></FilterField>}
-        <FilterField label="Tipo"><Select name="tipo" options={TIPOS} defaultValue={tipo} placeholder="Todos" /></FilterField>
+        <FilterField label="Categoría" className="min-w-56"><Select name="categoria" options={categorias.map((c) => ({ id: c.nombre, nombre: c.nombre }))} defaultValue={categoria} placeholder="Todas" /></FilterField>
         <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
-        <FilterField label="Mostrar"><Select name="mostrar" required options={[{ id: 'todos', nombre: 'Todos' }, { id: 'con_stock', nombre: 'Solo con stock' }]} defaultValue={mostrar} /></FilterField>
       </FilterBar>
       {conCosto && <p className="-mt-2 mb-3 text-xs text-muted">Costo unit. promedio = promedio de lo que costó cada unidad en todas las compras · Valor total = cantidad × costo promedio. Los precios reales de cada boleta están en <Link href="/precios" className="enlace">Trazabilidad de precios</Link>.</p>}
 
@@ -114,7 +109,10 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title="Sin resultados" description="Ajuste los filtros o registre el stock inicial en Entradas y salidas." />}
+        ) : q || estado || categoria || alerta
+          ? <EmptyState title="Sin resultados" description="Ajuste los filtros." />
+          : <EmptyState title="Aún no hay stock" description="Registre el stock inicial de cada producto en el Catálogo."
+              action={panel === 'almacen' ? <LinkButton href="/productos" variant="outline">Ir al Catálogo</LinkButton> : undefined} />}
       </Section>
     </>
   )

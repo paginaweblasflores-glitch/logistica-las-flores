@@ -34,7 +34,7 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
       if (error) throw error
       // sin filas = no tiene permiso (Logística solo consulta)
       if (!hecho?.length) return { error: 'No puede editar este producto: lo administra el responsable del almacén de su negocio.' }
-      // primera vez: la cantidad que tiene hoy en el almacén elegido (entrada «Producto nuevo», una sola vez)
+      // primera vez: la cantidad que tiene hoy en el almacén elegido (entrada «Stock inicial», una sola vez)
       const cantidad = Number(s('cantidad') ?? 0)
       const almacen = s('almacen')
       let extra = ''
@@ -62,7 +62,7 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
     check(await supabase.from('producto_almacen').upsert({ producto_id: nuevo.id, almacen_id: almacen, stock_minimo: minimo,
       fecha_vencimiento: vence, dias_aviso_vencimiento: diasAviso(s('dias_aviso_vencimiento')) },
       { onConflict: 'producto_id,almacen_id', ignoreDuplicates: true }))
-    // la cantidad que tiene hoy: entrada «Producto nuevo» (una sola vez)
+    // la cantidad que tiene hoy: entrada «Stock inicial» (una sola vez)
     if (cantidad > 0) {
       check(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen, p_lineas: [{ producto_id: nuevo.id, cantidad, precio: precio ? Number(precio) : null, fecha_vencimiento: vence }] }))
     }
@@ -71,7 +71,7 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
   })
 }
 
-/** Stock inicial del producto en un almacén: entrada «Producto nuevo», UNA sola vez (si ya tiene, no se cambia). */
+/** Stock inicial del producto en un almacén: entrada «Stock inicial», UNA sola vez (si ya tiene, no se cambia). */
 export async function registrarStockInicial(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const s = (k: string) => String(fd.get(k) ?? '').trim() || null
