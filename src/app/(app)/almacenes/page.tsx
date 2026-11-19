@@ -3,7 +3,9 @@ import { PackageX, Users, TrendingDown, BadgeAlert, Warehouse } from 'lucide-rea
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
-import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
+import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima, inicioDiaLima, finDiaLima } from '@/lib/format'
+import { agruparPorZona } from '@/lib/categorias'
+import { TablaPorCategoria } from '@/components/tabla-por-categoria'
 import { sp } from '@/lib/utils'
 import { PageHeader, Section, Stat, Table, Th, Td, FilterBar, FiltroFechas, EmptyState } from '@/components/ui'
 import { BarList } from '@/components/charts'
@@ -24,66 +26,44 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
   const almacenes = todos.filter((a) => !local || a.local_id === local.id).sort((a, b) => a.nombre.localeCompare(b.nombre))   // 01, 02, Umaru
   const ids = almacenes.map((a) => a.id)
 
-  const [stockR, movsR, ingresosR, traspasosR] = await Promise.all([
-    supabase.from('v_stock').select('producto_id, almacen_id, nombre, unidad, cantidad, valor, stock_minimo, estado').in('almacen_id', ids).limit(20000),
-    supabase.from('movimiento')
-      .select('tipo, almacen_id, area:area_id(nombre), movimiento_detalle(cantidad, costo_unitario, fifo_cumplido, producto:producto_id(id, nombre))')
-      .in('almacen_id', ids).eq('anulado', false)
-      .in('tipo', ['salida_consumo', 'merma', 'ajuste_negativo', 'devolucion_proveedor', 'entrada_compra'])
-      .gte('fecha', `${desde}T00:00:00-05:00`).lte('fecha', `${hasta}T23:59:59-05:00`).limit(20000),
+  // los totales ya vienen sumados de la base (antes se traían hasta 20 000 filas y se sumaban aquí)
+  const [resumenR, ingresosR, traspasosR] = await Promise.all([
+    supabase.rpc('fn_resumen_almacenes', { p_almacenes: ids, p_desde: desde, p_hasta: hasta }),
     supabase.from('v_ingreso_almacen').select('id, compra_id, numero, almacen_id, almacen, fecha_ingreso, proveedor, producto, precio_orden, precio_unitario, sin_orden')
       .in('almacen_id', ids).eq('diferencia_precio', true)
-      .gte('fecha_ingreso', `${desde}T00:00:00-05:00`).lte('fecha_ingreso', `${hasta}T23:59:59-05:00`).order('fecha_ingreso', { ascending: false }).limit(50),
+      .gte('fecha_ingreso', inicioDiaLima(desde)).lte('fecha_ingreso', finDiaLima(hasta)).order('fecha_ingreso', { ascending: false }).limit(50),
     supabase.from('traslado').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente').or(`almacen_origen_id.in.(${ids.join(',')}),almacen_destino_id.in.(${ids.join(',')})`),
   ])
+  if (resumenR.error) throw resumenR.error
 
-  type S = { producto_id: string; almacen_id: string; nombre: string; unidad: string; cantidad: number; valor: number; stock_minimo: number; estado: string }
-  type M = { tipo: string; almacen_id: string; area: { nombre: string } | null
-    movimiento_detalle: { cantidad: number; costo_unitario: number | null; fifo_cumplido: boolean | null; producto: { id: string; nombre: string } }[] }
-  type I = { id: string; compra_id: string; numero: string; almacen: string; fecha_ingreso: string; proveedor: string | null; producto: string; precio_orden: number; precio_unitario: number; sin_orden: boolean }
-  const stock = (stockR.data ?? []) as S[]
-  const movs = (movsR.data ?? []) as unknown as M[]
-  const ingresos = (ingresosR.data ?? []) as I[]
-
-  const valorDe = (m: M) => m.movimiento_detalle.reduce((s, d) => s + Number(d.cantidad) * Number(d.costo_unitario ?? 0), 0)
-  // stock mínimo: lo fija cada almacén (0 = no se controla)
-  const bajoMinimo = stock.filter((s) => Number(s.stock_minimo) > 0 && Number(s.cantidad) <= Number(s.stock_minimo))
-    .sort((a, b) => Number(a.cantidad) / Number(a.stock_minimo) - Number(b.cantidad) / Number(b.stock_minimo))
-
-  const porAlmacen = almacenes.map((a) => {
-    const st = stock.filter((s) => s.almacen_id === a.id)
-    const mv = movs.filter((m) => m.almacen_id === a.id)
-    const suma = (tipos: string[]) => mv.filter((m) => tipos.includes(m.tipo)).reduce((s, m) => s + valorDe(m), 0)
-    return {
-      ...a,
-      productos: st.filter((s) => Number(s.cantidad) > 0).length,
-      valor: st.reduce((s, x) => s + Math.max(0, Number(x.valor)), 0),
-      bajo: bajoMinimo.filter((s) => s.almacen_id === a.id).length,
-      compras: suma(['entrada_compra']),
-      consumo: suma(['salida_consumo']),
-      mermas: suma(['merma', 'ajuste_negativo']),
-    }
-  })
-  const tot = porAlmacen.reduce((t, a) => ({ valor: t.valor + a.valor, consumo: t.consumo + a.consumo, mermas: t.mermas + a.mermas, compras: t.compras + a.compras }),
-    { valor: 0, consumo: 0, mermas: 0, compras: 0 })
-
-  // consumo por área y productos que más salen (salidas a las áreas)
-  const porArea = new Map<string, number>(), porProducto = new Map<string, { nombre: string; valor: number }>()
-  for (const m of movs.filter((x) => x.tipo === 'salida_consumo')) {
-    const area = m.area?.nombre ?? 'Sin área'
-    porArea.set(area, (porArea.get(area) ?? 0) + valorDe(m))
-    for (const d of m.movimiento_detalle) {
-      const p = porProducto.get(d.producto.id) ?? { nombre: d.producto.nombre, valor: 0 }
-      p.valor += Number(d.cantidad) * Number(d.costo_unitario ?? 0)
-      porProducto.set(d.producto.id, p)
-    }
+  type Bajo = { producto_id: string; almacen_id: string; almacen_nombre: string; nombre: string; unidad: string; cantidad: number; stock_minimo: number
+    categoria: string | null; zona: string | null }
+  type Resumen = {
+    por_almacen: { almacen_id: string; productos: number; valor: number; bajo: number; compras: number; consumo: number; mermas: number }[]
+    por_area: { area: string; valor: number }[]; top_productos: { producto_id: string; producto: string; valor: number }[]
+    fifo_total: number; fifo_cumplidas: number; bajo_minimo: Bajo[]
   }
-  const areas = [...porArea].sort((a, b) => b[1] - a[1]).slice(0, 10)
-  const top = [...porProducto].sort((a, b) => b[1].valor - a[1].valor).slice(0, 10)
-  // FIFO: de las salidas de productos con lote, cuántas tomaron el más antiguo
-  const fifo = movs.flatMap((m) => m.movimiento_detalle).filter((d) => d.fifo_cumplido !== null)
-  const fifoPct = fifo.length ? fifo.filter((d) => d.fifo_cumplido).length / fifo.length : null
-  const nombreAlm = (id: string) => almacenes.find((a) => a.id === id)?.nombre ?? ''
+  type I = { id: string; compra_id: string; numero: string; almacen: string; fecha_ingreso: string; proveedor: string | null; producto: string; precio_orden: number; precio_unitario: number; sin_orden: boolean }
+  const r = resumenR.data as Resumen
+  const ingresos = (ingresosR.data ?? []) as I[]
+  const bajoMinimo = r.bajo_minimo
+
+  const porAlmacen = almacenes.map((a) => ({ ...a, ...(r.por_almacen.find((x) => x.almacen_id === a.id) ?? { productos: 0, valor: 0, bajo: 0, compras: 0, consumo: 0, mermas: 0 }) }))
+  const tot = porAlmacen.reduce((t, a) => ({ valor: t.valor + Number(a.valor), consumo: t.consumo + Number(a.consumo), mermas: t.mermas + Number(a.mermas), compras: t.compras + Number(a.compras) }),
+    { valor: 0, consumo: 0, mermas: 0, compras: 0 })
+  const areas = r.por_area, top = r.top_productos
+  const fifoPct = r.fifo_total ? r.fifo_cumplidas / r.fifo_total : null
+  const variosAlmacenes = almacenes.length > 1
+
+  // cada producto bajo el mínimo abre su Kardex en ese almacén
+  const filaBajo = (s: Bajo) => (
+    <tr key={s.producto_id + s.almacen_id} className="hover:bg-canvas/60">
+      <Td><Link href={`/inventario/kardex?producto=${s.producto_id}&almacen=${s.almacen_id}`} className="font-medium hover:text-brand-600">{s.nombre}</Link></Td>
+      {variosAlmacenes && <Td className="text-xs">{s.almacen_nombre}</Td>}
+      <Td right className={Number(s.cantidad) <= 0 ? 'font-semibold text-brand-700' : 'font-semibold text-amber-700'}>{fmtQty(s.cantidad)} {s.unidad}</Td>
+      <Td right className="text-muted">{fmtQty(s.stock_minimo)}</Td>
+    </tr>
+  )
 
   return (
     <>
@@ -98,7 +78,7 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
         <Stat label="Bajo el mínimo" value={bajoMinimo.length} tone={bajoMinimo.length ? 'warn' : 'default'} hint="Productos por reponer" />
         <Stat label="Consumo de áreas" value={fmtSoles(tot.consumo)} hint="Salidas del periodo" />
         <Stat label="Mermas y faltantes" value={fmtSoles(tot.mermas)} tone={tot.mermas ? 'warn' : 'default'} hint="Del periodo" />
-        <Stat label="Cumplimiento FIFO" value={fmtPct(fifoPct)} meta={fifoPct === null ? undefined : { valor: fifoPct, meta: 1 }} hint={fifo.length ? `${fifo.length} salidas con lote` : 'Sin salidas con lote'} />
+        <Stat label="Cumplimiento FIFO" value={fmtPct(fifoPct)} meta={fifoPct === null ? undefined : { valor: fifoPct, meta: 1 }} hint={r.fifo_total ? `${r.fifo_total} salidas con lote` : 'Sin salidas con lote'} />
       </div>
 
       <Section icon={Warehouse} title="Por almacén" className="mb-5" bodyClassName="p-0" stats={[{ label: 'Traspasos sin recibir', value: traspasosR.count ?? 0 }]}>
@@ -124,12 +104,12 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
       <div className="mb-5 grid gap-5 lg:grid-cols-2">
         <Section icon={Users} title="¿Cuánto consume cada área?" bodyClassName="p-5">
           {areas.length
-            ? <BarList color={PALETTE.ink} items={areas.map(([nombre, v]) => ({ key: nombre, label: nombre, value: v, share: tot.consumo ? v / tot.consumo : 0 }))} />
+            ? <BarList color={PALETTE.ink} items={areas.map((x) => ({ key: x.area, label: x.area, value: Number(x.valor), share: tot.consumo ? Number(x.valor) / tot.consumo : 0 }))} />
             : <EmptyState title="Sin salidas a áreas en el periodo" />}
         </Section>
         <Section icon={TrendingDown} title="Productos que más salen" bodyClassName="p-5">
           {top.length
-            ? <BarList color={PALETTE.red} items={top.map(([id, p]) => ({ key: id, label: p.nombre, value: p.valor, share: tot.consumo ? p.valor / tot.consumo : 0 }))} />
+            ? <BarList color={PALETTE.red} items={top.map((p) => ({ key: p.producto_id, label: p.producto, value: Number(p.valor), share: tot.consumo ? Number(p.valor) / tot.consumo : 0 }))} />
             : <EmptyState title="Sin salidas en el periodo" />}
         </Section>
       </div>
@@ -137,16 +117,11 @@ export default async function ResumenAlmacenesPage({ searchParams }: { searchPar
       <div className="mb-5">
         <Section icon={PackageX} title="Bajo el stock mínimo" bodyClassName="p-0" stats={[{ label: 'Productos', value: bajoMinimo.length }]}>
           {bajoMinimo.length ? (
-            <Table>
-              <thead><tr><Th>Producto</Th><Th>Almacén</Th><Th right>Hay</Th><Th right>Mínimo</Th></tr></thead>
-              <tbody>{bajoMinimo.slice(0, 15).map((s) => (
-                <tr key={s.producto_id + s.almacen_id}>
-                  <Td className="font-medium">{s.nombre}</Td><Td className="text-xs">{nombreAlm(s.almacen_id)}</Td>
-                  <Td right className={Number(s.cantidad) <= 0 ? 'font-semibold text-brand-700' : 'font-semibold text-amber-700'}>{fmtQty(s.cantidad)} {s.unidad}</Td>
-                  <Td right className="text-muted">{fmtQty(s.stock_minimo)}</Td>
-                </tr>
-              ))}</tbody>
-            </Table>
+            <TablaPorCategoria id="bajo-minimo" columnas={variosAlmacenes ? 4 : 3} anchos={variosAlmacenes ? [undefined, '13rem', '9rem', '7rem'] : [undefined, '9rem', '7rem']}
+              head={<tr><Th>Producto</Th>{variosAlmacenes && <Th>Almacén</Th>}<Th right>Hay</Th><Th right>Mínimo</Th></tr>}
+              zonas={agruparPorZona(bajoMinimo, (s) => s.zona, (s) => s.categoria).map((z) => ({
+                zona: z.zona, categorias: z.categorias.map(([cat, xs]) => ({ categoria: cat, cantidad: xs.length, filas: xs.map(filaBajo) })),
+              }))} />
           ) : <EmptyState title="Todo sobre el mínimo" description="Cada almacén fija el mínimo de sus productos en su ficha." />}
         </Section>
       </div>

@@ -40,6 +40,13 @@ export function ahoraLima() {
 export function haceDias(dias: number) {
   return new Date(Date.now() - dias * 86_400_000).toISOString()
 }
+/**
+ * Un día de Lima como instante, para filtrar «desde» / «hasta» en columnas con fecha y hora (movimientos, ingresos…).
+ * Sin la zona horaria la base los toma en hora de Londres: «hasta el 19» perdía lo registrado después de las 7 p. m.
+ * También sirven con columnas de solo fecha. Perú no cambia de horario: siempre −05:00.
+ */
+export const inicioDiaLima = (dia: string) => `${dia}T00:00:00-05:00`
+export const finDiaLima = (dia: string) => `${dia}T23:59:59.999-05:00`
 export function inicioMes(fecha = hoyLima()) {
   return `${fecha.slice(0, 7)}-01`
 }

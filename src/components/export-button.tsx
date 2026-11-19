@@ -5,6 +5,7 @@ import { Download, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { btnClass } from '@/components/ui'
+import { inicioDiaLima, finDiaLima } from '@/lib/format'
 
 /**
  * Exporta una vista/tabla a Excel (.xlsx) respetando filtros de igualdad y rango de fechas.
@@ -39,8 +40,8 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
           if (Array.isArray(v)) q = q.in(k, v)
           else if (v) q = q.eq(k, v)
         }
-        if (dateColumn && desde) q = q.gte(dateColumn, desde)
-        if (dateColumn && hasta) q = q.lte(dateColumn, `${hasta}T23:59:59`)
+        if (dateColumn && desde) q = q.gte(dateColumn, inicioDiaLima(desde))
+        if (dateColumn && hasta) q = q.lte(dateColumn, finDiaLima(hasta))
         if (order) q = q.order(order, { ascending: !desc })
         const { data, error } = await q.range(from, from + 999)
         if (error) throw error

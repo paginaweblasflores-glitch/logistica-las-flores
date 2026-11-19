@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
 import { Select } from '@/components/select'
-import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima, inicioMes, MESES_CORTO } from '@/lib/format'
+import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima, inicioMes, inicioDiaLima, finDiaLima, MESES_CORTO } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { COLOR_LOCAL } from '@/lib/palette'
 import { PageHeader, Section, Th, Td, FilterBar, FilterField, FiltroFechas, EmptyState, Stat, LocalBadge, Badge, LinkButton, Note } from '@/components/ui'
@@ -46,7 +46,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
 
   let q = supabase.from('v_ingreso_almacen')
     .select('id, compra_id, numero, sin_orden, local_codigo, almacen, fecha_ingreso, proveedor, tipo_documento, numero_documento, total_documento, producto, producto_codigo, codigo_almacen, marca, presentacion, unidad, fuera_de_catalogo, cantidad, precio_unitario, precio_orden, total, diferencia_precio, variacion_pct, recibido_por')
-    .gte('fecha_ingreso', desde).lte('fecha_ingreso', `${hasta}T23:59:59`).eq('fuera_de_catalogo', false)   // los bienes fuera de catálogo van al área, no al almacén
+    .gte('fecha_ingreso', inicioDiaLima(desde)).lte('fecha_ingreso', finDiaLima(hasta)).eq('fuera_de_catalogo', false)   // los bienes fuera de catálogo van al área, no al almacén
   let qAnio = supabase.from('v_ingreso_almacen').select('fecha_ingreso, local_codigo, total').gte('fecha_ingreso', `${anio}-01-01`).eq('fuera_de_catalogo', false)
   if (local) { q = q.eq('local_id', local.id); qAnio = qAnio.eq('local_id', local.id) }
   if (almacenId) { q = q.eq('almacen_id', almacenId); qAnio = qAnio.eq('almacen_id', almacenId) }

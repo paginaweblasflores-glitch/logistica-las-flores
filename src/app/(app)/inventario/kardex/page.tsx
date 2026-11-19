@@ -3,7 +3,7 @@ import { ScrollText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getAlmacenActivo, getPanel } from '@/lib/session'
 import { getAlmacenes } from '@/lib/queries'
-import { fmtDate, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
+import { fmtDate, fmtQty, fmtSoles, hoyLima, inicioDiaLima, finDiaLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { PageHeader, Section, Th, Td, FilterBar, FilterField, FiltroFechas, EmptyState, Badge, Note } from '@/components/ui'
 import { Select } from '@/components/select'
@@ -26,7 +26,7 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
   // Con producto: Kardex con saldo acumulado. Sin producto: últimas líneas (sin recorrer todo el historial)
   let q = supabase.from(producto ? 'v_kardex' : 'v_movimiento_linea')
     .select(`detalle_id, movimiento_id, numero, nro, fecha, tipo_nombre, signo, almacen_nombre, almacen_id, motivo_nombre, referencia_tipo, referencia_id, documento, observacion, producto_id, producto_nombre, unidad, entrada, salida, costo_unitario, importe, fifo_cumplido, codigo_almacen${producto ? ', saldo' : ''}`)
-    .gte('fecha', desde).lte('fecha', `${hasta}T23:59:59`)
+    .gte('fecha', inicioDiaLima(desde)).lte('fecha', finDiaLima(hasta))
   if (producto) q = q.eq('producto_id', producto)
   if (almacen) q = q.eq('almacen_id', almacen)
   else if (local) q = q.eq('local_id', local.id)
