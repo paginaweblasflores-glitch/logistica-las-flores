@@ -1,6 +1,4 @@
-import { Suspense } from 'react'
 import Link from 'next/link'
-import { Cargando } from '@/components/cargando'
 import { ShoppingCart, ClipboardCheck, TrendingUp, Layers, Truck, Target, BellRing, PackageX, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel } from '@/lib/session'
@@ -38,16 +36,11 @@ function Pregunta({ children, detalle }: { children: React.ReactNode; detalle?: 
   )
 }
 
-/** El panel principal vive junto al layout: su marco de carga va aquí (los demás módulos usan su loading.tsx). */
-export default function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  return (
-    <Suspense fallback={<Cargando />}>
-      <Dashboard searchParams={searchParams} />
-    </Suspense>
-  )
-}
-
-async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+/**
+ * Panel principal. Sin marco de carga propio: al navegar se queda la pantalla anterior hasta que esta llega
+ * completa (la barra de progreso de arriba avisa que está cargando).
+ */
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   const panel = await getPanel()
   // la contadora: su registro de compras

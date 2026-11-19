@@ -12,6 +12,13 @@ import { createClient } from '@/lib/supabase/server'
 import type { AlertaStock, AvisoRequerimiento, AvisoVence, Avisos } from '@/components/shell/campana'
 
 /**
+ * Al cambiar de pantalla NO se muestra un esqueleto: la pantalla anterior se queda hasta que la nueva llega
+ * completa (decisión del usuario, 2026-11-19; la barra de progreso de arriba avisa que está cargando).
+ * `instant = false` le dice a Next.js que estas pantallas esperan a propósito (sin el aviso «uncached data»).
+ */
+export const instant = false
+
+/**
  * Marco de todas las pantallas. No espera la sesión: el marco aparece al instante y, en paralelo,
  * llegan la barra lateral (usuario, negocio, avisos) y el contenido de la pantalla (navegación instantánea).
  */

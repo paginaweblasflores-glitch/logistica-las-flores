@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   devIndicators: { position: 'bottom-right' },
   experimental: {
     serverActions: { bodySizeLimit: '8mb' }, // subida de fotos y documentos
+    // Sin esqueleto al navegar (decisión del usuario, 2026-11-19): cada pantalla espera a estar completa.
+    // Next.js solo revisa la «navegación instantánea» en las pantallas que la pidan con `instant` (ninguna).
+    instantInsights: { validationLevel: 'manual-warning' },
   },
 }
 

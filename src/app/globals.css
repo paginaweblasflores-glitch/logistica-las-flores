@@ -126,3 +126,19 @@
   .print-area tr, .print-area .firmas > div { break-inside: avoid; }
   .print-area .firmas { break-inside: avoid; }
 }
+
+/* Barra de progreso al cambiar de pantalla (sin esqueleto: la pantalla anterior se queda hasta que llega la nueva).
+   Aparece recién a los 150 ms, para que en las cargas rápidas no parpadee; avanza rápido y luego despacio. */
+.barra-progreso {
+  position: fixed; top: 0; left: 0; z-index: 100; height: 3px; width: 0;
+  background: var(--color-brand-600); box-shadow: 0 0 8px var(--color-brand-600);
+  opacity: 0; animation: barra-avanza 10s cubic-bezier(.1, .7, .3, 1) 150ms forwards;
+}
+@keyframes barra-avanza {
+  0% { width: 0; opacity: 1; }
+  20% { width: 55%; opacity: 1; }
+  100% { width: 92%; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .barra-progreso { animation: none; opacity: 1; width: 100%; background: var(--color-brand-200); }
+}

@@ -1,6 +1,6 @@
 /**
- * Marco de carga de una pantalla: se muestra al instante al hacer clic mientras llegan sus datos.
- * Cada carpeta de pantalla lo usa en su loading.tsx (la navegación entre módulos necesita uno propio por pantalla).
+ * Marco de carga: solo al abrir el sistema o recargar la página (F5). Al cambiar de pantalla ya no se usa:
+ * la pantalla anterior se queda hasta que llega la nueva completa (ver el layout de la app).
  */
 export function Cargando() {
   return (

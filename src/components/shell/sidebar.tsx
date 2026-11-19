@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { SelectorAmbito, type AmbitoBarra } from './selector-ambito'
 import { Campana, type Avisos } from './campana'
 import { PerfilBarra } from './perfil-menu'
+import { BarraProgreso } from './barra-progreso'
 
 /** Todo lo que antes iba en la barra superior: negocio/almacén, avisos y usuario. */
 export type Barra = AmbitoBarra & { usuario: { nombre: string; rol: string }; avisos: Avisos | null }
@@ -130,6 +131,7 @@ export function Sidebar({ panel, subtitulo, barra }: { panel: Panel; subtitulo: 
 
   return (
     <>
+      <BarraProgreso />
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 bg-ink-900 lg:block">
         <NavContent panel={panel} subtitulo={subtitulo} barra={barra} />
       </aside>
