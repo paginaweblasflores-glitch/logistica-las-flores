@@ -1,4 +1,4 @@
-import { Settings, Lock, Users, Warehouse } from 'lucide-react'
+import { Settings, Lock, Users, Warehouse, Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getLocalesOpc } from '@/lib/queries'
 import { fmtDate, hoyLima, MESES } from '@/lib/format'
@@ -6,7 +6,8 @@ import { PageHeader, Section, Th, Td, Badge, Note } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
-import { actualizarUsuario, cerrarPeriodo, crearCatalogo, guardarAprobadores, guardarParametros } from './actions'
+import { actualizarUsuario, cerrarPeriodo, crearCatalogo, guardarAprobadores, guardarParametros, guardarZonas } from './actions'
+import { ZONAS } from '@/lib/zonas'
 import { PagedTable } from '@/components/pager'
 
 export const metadata = { title: 'Configuración' }
@@ -15,7 +16,7 @@ const PCT = new Set(['meta_otif', 'meta_diferencia_inventario', 'meta_fifo', 'me
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
-  const [{ data: params }, { data: cierres }, { data: usuarios }, { data: roles }, { data: almacenes }, { data: areas }, locales, { data: aprobadores }] = await Promise.all([
+  const [{ data: params }, { data: cierres }, { data: usuarios }, { data: roles }, { data: almacenes }, { data: areas }, locales, { data: aprobadores }, { data: cats }] = await Promise.all([
     supabase.from('parametro').select('clave, valor, descripcion').order('clave'),
     supabase.from('periodo_cierre').select('local_id, anio, mes, cerrado, cerrado_at, local:local_id(nombre)').order('anio', { ascending: false }).order('mes', { ascending: false }),
     supabase.from('usuario').select('id, username, nombre, rol, todos_locales, activo'),
@@ -24,6 +25,7 @@ export default async function ConfiguracionPage() {
     supabase.from('area').select('id, nombre, local:local_id(codigo)').order('nombre'),
     getLocalesOpc(),
     supabase.from('requerimiento_aprobador').select('id, nombre, cargo, monto_hasta').order('orden'),
+    supabase.from('categoria').select('id, nombre, zona').is('padre_id', null).order('nombre'),
   ])
   type C = { local_id: string; anio: number; mes: number; cerrado: boolean; cerrado_at: string; local: { nombre: string } }
 
@@ -97,6 +99,24 @@ export default async function ConfiguracionPage() {
             <div className="p-4"><Note>Los usuarios nuevos (compras, almacén, cocina, mozos) se crearán cuando se definan los perfiles. Cada rol solo puede modificar los módulos que le corresponden (permisos aplicados en la base de datos con RLS).</Note></div>
           </Section>
         </div>
+
+        {/* dónde se guarda cada categoría en el almacén físico (lo revisa el fiscalizador municipal) */}
+        <Section icon={Layers} title="Zonas del almacén" className="xl:col-span-2">
+          <ActionForm action={guardarZonas} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {(cats ?? []).map((c) => (
+                <label key={c.id}>
+                  <span className="label">{c.nombre}</span>
+                  <Select name={`zona_${c.id}`} options={ZONAS} defaultValue={c.zona} placeholder="Sin zona" ariaLabel={`Zona de ${c.nombre}`} />
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted">{ZONAS.map((z) => z.nombre).join(' · ')}. Los productos de limpieza y químicos van separados de los alimentos.</p>
+              <SubmitButton soloConCambios>Guardar zonas</SubmitButton>
+            </div>
+          </ActionForm>
+        </Section>
 
         <Section icon={Warehouse} title="Almacenes, oficinas y áreas" className="xl:col-span-2" bodyClassName="grid gap-6 p-5 lg:grid-cols-2">
           <div>

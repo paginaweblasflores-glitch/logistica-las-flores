@@ -10,7 +10,7 @@ import { resolverOrigen } from '@/lib/listas-abiertas'
 function campos(fd: FormData) {
   const s = (k: string) => (String(fd.get(k) ?? '').trim() || null)
   return {
-    ruc: s('ruc'), razon_social: String(fd.get('razon_social') ?? '').trim().toUpperCase(), nombre_comercial: s('nombre_comercial'),
+    ruc: s('ruc'), dni: s('dni'), razon_social: String(fd.get('razon_social') ?? '').trim().toUpperCase(), nombre_comercial: s('nombre_comercial'),
     subcategoria: s('subcategoria')?.toUpperCase() ?? null, direccion: s('direccion'), telefono: s('telefono'),
     email: s('email'), contacto: s('contacto'), condiciones_pago: s('condiciones_pago'), forma_pedido: s('forma_pedido'),
     dias_pedido: s('dias_pedido'), banco: s('banco'), titular_cuenta: s('titular_cuenta'), numero_cuenta: s('numero_cuenta'),
@@ -25,6 +25,7 @@ export async function guardarProveedor(_: ActionResult, fd: FormData): Promise<A
     const datos = campos(fd)
     if (!datos.razon_social) return { error: 'La razón social es obligatoria.' }
     if (datos.ruc && !/^\d{11}$/.test(datos.ruc)) return { error: 'El RUC debe tener 11 dígitos.' }
+    if (datos.dni && !/^\d{8}$/.test(datos.dni)) return { error: 'El DNI debe tener 8 dígitos.' }
     const supabase = await createClient()
     const datosCompletos = { ...datos, ciudad_id: await resolverOrigen(supabase, fd.get('ciudad')) }
     const id = String(fd.get('id') ?? '')

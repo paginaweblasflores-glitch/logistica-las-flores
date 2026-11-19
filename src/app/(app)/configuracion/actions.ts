@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getUsuario } from '@/lib/session'
 import { run, check, type ActionResult } from '@/lib/actions'
+import { ZONAS } from '@/lib/zonas'
 
 export async function guardarParametros(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
@@ -84,5 +85,21 @@ export async function guardarAprobadores(_: ActionResult, fd: FormData): Promise
     revalidatePath('/configuracion')
     revalidatePath('/requerimientos', 'layout')
     return { message: 'Aprobadores actualizados.' }
+  })
+}
+
+/** Zona sanitaria de cada categoría (dónde se guarda en el almacén físico): campos «zona_<id de la categoría>». */
+export async function guardarZonas(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const validas = new Set<string>(ZONAS.map((z) => z.id))
+    const cambios = [...fd.entries()].filter(([k]) => k.startsWith('zona_')).map(([k, v]) => ({ id: k.slice(5), zona: String(v) || null }))
+    if (cambios.some((c) => c.zona && !validas.has(c.zona))) return { error: 'Zona no válida.' }
+    const supabase = await createClient()
+    // todas a la vez; sin filas devueltas = sin permiso (solo Logística cambia las zonas)
+    const res = await Promise.all(cambios.map((c) => supabase.from('categoria').update({ zona: c.zona }).eq('id', c.id).select('id')))
+    for (const r of res) check(r)
+    if (res.some((r) => !r.data?.length)) return { error: 'No se pudieron guardar todas las zonas: verifique sus permisos.' }
+    revalidatePath('/', 'layout')
+    return { message: 'Zonas del almacén actualizadas.' }
   })
 }

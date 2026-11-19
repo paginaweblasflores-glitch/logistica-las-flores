@@ -9,7 +9,7 @@ import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, FilterBar, FilterField, Pagination, EmptyState, LocalBadge, Note, LinkButton } from '@/components/ui'
 import { ProductoFoto } from '@/components/producto-foto'
 import { TablaPorCategoria } from '@/components/tabla-por-categoria'
-import { agruparPorCategoria } from '@/lib/categorias'
+import { agruparPorZona } from '@/lib/categorias'
 import { Select } from '@/components/select'
 
 export const metadata = { title: 'Stock actual' }
@@ -27,7 +27,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const conCosto = panel !== 'almacen'
 
   let query = supabase.from('v_stock')
-    .select('producto_id, almacen_id, codigo, codigo_almacen, nombre, producto_tipo, categoria, unidad, local_codigo, almacen_nombre, cantidad, costo_promedio, valor, stock_minimo, stock_maximo, stock_objetivo, estado, ultimo_movimiento, imagen_url', { count: 'exact' })
+    .select('producto_id, almacen_id, codigo, codigo_almacen, nombre, producto_tipo, categoria, unidad, local_codigo, almacen_nombre, cantidad, costo_promedio, valor, stock_minimo, stock_maximo, stock_objetivo, estado, ultimo_movimiento, imagen_url, zona', { count: 'exact' })
   if (local) query = query.eq('local_id', local.id)
   if (almacen) query = query.eq('almacen_id', almacen)
   const alerta = sp(params, 'alerta') === '1'   // desde la campanita: por acabarse + agotados con mínimo
@@ -63,7 +63,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
 
   type Row = { producto_id: string; almacen_id: string; codigo: string; codigo_almacen: number | null; nombre: string; imagen_url: string | null; categoria: string | null; unidad: string; local_codigo: string
     almacen_nombre: string; cantidad: number; costo_promedio: number; valor: number; stock_minimo: number | null; stock_maximo: number | null
-    stock_objetivo: number | null; estado: string; ultimo_movimiento: string | null }
+    stock_objetivo: number | null; estado: string; ultimo_movimiento: string | null; zona: string | null }
 
   // una fila de la tabla (la misma agrupada por categoría y con páginas)
   const fila = (r: Row) => (
@@ -118,15 +118,19 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         stats={[...(conCosto ? [{ label: 'Valor total', value: fmtSoles(valor) }] : []), { label: 'Registros', value: count ?? 0 }, { label: 'Críticos', value: criticos }]}>
         {data?.length ? (
           agrupar ? (
-            // el almacén ve su stock organizado por categoría (cada una se abre y se cierra)
-            <TablaPorCategoria columnas={conCosto ? 9 : 7} head={<tr>
+            // el almacén ve su stock como el almacén físico: por zona sanitaria y, dentro, por categoría
+            <TablaPorCategoria id="stock" columnas={conCosto ? 9 : 7}
+              anchos={[undefined, '11rem', '8rem', '6rem', ...(conCosto ? ['9rem', '8rem'] : []), '7.5rem', '7rem', '6.5rem']} head={<tr>
                 <Th>Producto</Th><Th>Almacén</Th><Th right>Stock</Th><Th right>Mín.</Th>{conCosto && <><Th right>Costo unit. promedio</Th><Th right>Valor total</Th></>}<Th>Estado</Th><Th>Últ. mov.</Th><Th />
               </tr>}
-              grupos={agruparPorCategoria(data as Row[], (r) => r.categoria).map(([cat, rs]) => {
-                const reponer = rs.filter((r) => r.estado === 'critico' || r.estado === 'agotado').length
-                return { categoria: cat, cantidad: rs.length, filas: rs.map((r) => fila(r)),
-                  detalle: reponer ? <span className="text-amber-700">· {reponer} por reponer</span> : undefined }
-              })} />
+              zonas={agruparPorZona(data as Row[], (r) => r.zona, (r) => r.categoria).map((z) => ({
+                zona: z.zona,
+                categorias: z.categorias.map(([cat, rs]) => {
+                  const reponer = rs.filter((r) => r.estado === 'critico' || r.estado === 'agotado').length
+                  return { categoria: cat, cantidad: rs.length, filas: rs.map((r) => fila(r)),
+                    detalle: reponer ? <span className="text-amber-700">· {reponer} por reponer</span> : undefined }
+                }),
+              }))} />
           ) : (
           <>
             <Table>

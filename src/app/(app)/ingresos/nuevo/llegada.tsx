@@ -11,6 +11,7 @@ import { fmtSoles, ahoraLima } from '@/lib/format'
 import { registrarEntradaCompra } from '../../compras/actions'
 import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
+import { CampoGuia } from '@/components/campo-guia'
 import { ProveedorPicker, type ProveedorOpc } from '@/components/proveedor-picker'
 import { TotalComprobante } from '@/components/total-comprobante'
 
@@ -120,6 +121,7 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
         <TotalComprobante suma={suma} onEscrito={setTotalDoc} />
         <label><span className="label">Fecha y hora de llegada</span>
           <input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
+        <CampoGuia />
       </div>
       <div className="space-y-1 text-sm">
         {noCuadra && <p className="font-semibold text-brand-700">El total del comprobante ({fmtSoles(num(totalDoc))}) no cuadra con la suma ({fmtSoles(suma)}). Revise cantidades y precios.</p>}

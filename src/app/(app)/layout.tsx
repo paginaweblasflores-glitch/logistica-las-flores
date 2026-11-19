@@ -37,7 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 async function BarraLateral() {
   const [usuario, ambito, almacenSel] = await Promise.all([getUsuario(), getAmbito(), getAlmacenActivo()])
   const panel = panelDe(usuario.rol)
-  const avisos = panel === 'area' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
+  const avisos = panel === 'area' || panel === 'contabilidad' ? null : await getAvisos(panel === 'logistica' ? 'requerimientos' : 'stock', almacenSel.id)
   return (
     <Sidebar
       panel={panel}

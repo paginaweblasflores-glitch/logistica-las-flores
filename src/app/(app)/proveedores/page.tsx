@@ -9,13 +9,14 @@ import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination,
 import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 import { TIPOS_PROVEEDOR, etiquetaTipo } from '@/lib/proveedor-tipo'
+import { getPanel } from '@/lib/session'
 
 export const metadata = { title: 'Proveedores' }
 
 export default async function ProveedoresPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   // la lista de ciudades (filtro) y el cliente al mismo tiempo
-  const [supabase, ciudades] = await Promise.all([createClient(), getCiudades()])
+  const [supabase, ciudades, panel] = await Promise.all([createClient(), getCiudades(), getPanel()])
   const { from, to } = paginar(params)
   const q = sp(params, 'q'), ciudad = sp(params, 'ciudad'), estado = sp(params, 'estado', 'activos'), tipo = sp(params, 'tipo')
 
@@ -39,7 +40,8 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
         actions={<>
           <ExportButton filename="proveedores" table="proveedor" order="razon_social"
             columns={{ ruc: 'RUC', razon_social: 'Razón social', subcategoria: 'Rubro', contacto: 'Contacto', telefono: 'Teléfono', email: 'Correo', forma_pedido: 'Forma de pedido', dias_pedido: 'Días de pedido', condiciones_pago: 'Condiciones de pago', fecha_registro: 'Fecha de registro', activo: 'Activo' }} />
-          <LinkButton href="/proveedores/nuevo"><Plus className="size-4" /> Nuevo proveedor</LinkButton>
+          {/* la contadora solo consulta */}
+          {panel !== 'contabilidad' && <LinkButton href="/proveedores/nuevo"><Plus className="size-4" /> Nuevo proveedor</LinkButton>}
         </>} />
 
 

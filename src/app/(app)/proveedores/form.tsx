@@ -8,7 +8,7 @@ import { Select } from '@/components/select'
 import { Section } from '@/components/ui'
 
 export type Proveedor = {
-  id?: string; ruc?: string | null; razon_social?: string; nombre_comercial?: string | null; subcategoria?: string | null; ciudad_id?: string | null
+  id?: string; ruc?: string | null; dni?: string | null; razon_social?: string; nombre_comercial?: string | null; subcategoria?: string | null; ciudad_id?: string | null
   direccion?: string | null; telefono?: string | null; email?: string | null; contacto?: string | null; condiciones_pago?: string | null
   forma_pedido?: string | null; dias_pedido?: string | null; banco?: string | null; titular_cuenta?: string | null; numero_cuenta?: string | null
   es_transportista?: boolean; activo?: boolean; observacion?: string | null; fecha_registro?: string; tipo?: string
@@ -26,6 +26,8 @@ export function ProveedorForm({ p = {}, ciudades }: { p?: Proveedor; ciudades: O
       <Grupo crear={crear} titulo="Datos del proveedor">
         {f('Razón social *', 'razon_social', { required: true }, 'md:col-span-2')}
         {f('RUC', 'ruc', { inputMode: 'numeric', maxLength: 11, pattern: '\\d{11}' })}
+        {/* productores sin RUC (cuy…): se les compra con liquidación de compra, que lleva su DNI */}
+        {f('DNI (si no tiene RUC)', 'dni', { inputMode: 'numeric', maxLength: 8, pattern: '\\d{8}' })}
         <label><span className="label">Tipo</span>
           <Select name="tipo" options={TIPOS_PROVEEDOR} defaultValue={p.tipo ?? 'proveedor'} required /></label>
         {f('Nombre comercial', 'nombre_comercial')}

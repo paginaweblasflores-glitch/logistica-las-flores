@@ -83,6 +83,20 @@ export async function aprobarCompra(_: ActionResult, fd: FormData): Promise<Acti
   })
 }
 
+/**
+ * Guía de remisión escrita al registrar la llegada (04 de la carpeta): su número o «No vino guía».
+ * Va antes de la llegada: si la guía no se puede guardar, no se registra nada y se avisa.
+ */
+async function guardarGuiaDeLlegada(supabase: Awaited<ReturnType<typeof createClient>>, compra: string, fd: FormData) {
+  const numero = String(fd.get('guia_numero') ?? '').trim()
+  const noVino = fd.get('guia_no_aplica') === '1'
+  if (!numero && !noVino) return
+  check(await supabase.rpc('fn_compra_documento_guardar', {
+    p_compra: compra, p_tipo: 'guia', p_estado: noVino ? 'no_aplica' : 'registrado',
+    p_numero: noVino ? null : numero, p_nota: noVino ? 'No vino guía (compra local)' : null,
+  }))
+}
+
 /** Llegada con la boleta: cantidad que llegó y precio unitario real por producto (el almacén, o Logística si es fuera de catálogo). */
 export async function recibirCompra(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
@@ -92,6 +106,7 @@ export async function recibirCompra(_: ActionResult, fd: FormData): Promise<Acti
     if (lineas.some((l) => !(l.cantidad >= 0) || !(l.precio >= 0))) return { error: 'Revise las cantidades y precios: no pueden ser negativos.' }
     if (lineas.some((l) => l.cantidad > 0 && l.precio === 0)) return { error: 'Falta el precio unitario de algún producto que llegó (cópielo de la boleta).' }
     const total = String(fd.get('total_documento') ?? '').replace(',', '.').trim()
+    await guardarGuiaDeLlegada(supabase, id, fd)
     check(await supabase.rpc('fn_recibir_compra_boleta', {
       p_compra: id, p_fecha: fechaRegistro(fd, 'fecha_entrega'),
       p_tipo_doc: String(fd.get('tipo_documento') ?? ''), p_num_doc: String(fd.get('numero_documento') ?? ''),
@@ -203,6 +218,7 @@ export async function registrarEntradaCompra(_: ActionResult, fd: FormData): Pro
     // el proveedor de la boleta (Logística marca «Comprado» sin proveedor)
     const proveedor = String(fd.get('proveedor') ?? '')
     if (!proveedor) return { error: 'Elija el proveedor de la boleta.' }
+    await guardarGuiaDeLlegada(supabase, String(fd.get('compra')), fd)
     // el proveedor de la boleta y la entrada van juntos: si la entrada falla, el proveedor tampoco cambia
     const ids = await enUnaOperacion(supabase, [
       { llamar: 'fn_compra_poner_proveedor', args: { p_compra: String(fd.get('compra')), p_proveedor: proveedor } },
@@ -218,5 +234,51 @@ export async function registrarEntradaCompra(_: ActionResult, fd: FormData): Pro
     revalidatePath('/requerimientos', 'layout')
     revalidatePath('/compras', 'layout')
     redirect(r.movimiento_id ? `/entradas/${r.movimiento_id}` : `/compras/${String(fd.get('compra'))}`)
+  })
+}
+
+/**
+ * Carpeta de la compra: registra o corrige un documento (proforma, archivo del comprobante, guía o pago),
+ * o lo marca «No aplica» con su motivo. El archivo ya se subió desde el navegador a compras/<id>/;
+ * la base valida permisos (Logística: todos; almacén: guía y comprobante de sus negocios).
+ */
+export async function guardarDocumentoCompra(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const id = String(fd.get('compra_id'))
+    const noAplica = fd.get('no_aplica') === '1'
+    const monto = num(String(fd.get('monto') ?? '').replace(',', '.').trim())
+    const supabase = await createClient()
+    check(await supabase.rpc('fn_compra_documento_guardar', {
+      p_compra: id, p_tipo: String(fd.get('tipo')), p_estado: noAplica ? 'no_aplica' : 'registrado',
+      p_numero: noAplica ? null : String(fd.get('numero') ?? '') || null, p_fecha: noAplica ? null : String(fd.get('fecha') ?? '') || null,
+      p_monto: noAplica ? null : monto, p_medio: noAplica ? null : String(fd.get('medio') ?? '') || null,
+      p_nota: String(fd.get('nota') ?? '') || null,
+      p_archivo_path: String(fd.get('archivo_path') ?? '') || null, p_archivo_nombre: String(fd.get('archivo_nombre') ?? '') || null,
+      p_archivo_mime: String(fd.get('archivo_mime') ?? '') || null,
+    }))
+    revalidatePath(`/compras/${id}`)
+    revalidatePath('/compras')
+    return { message: noAplica ? 'Marcado «No aplica».' : 'Documento guardado en la carpeta.' }
+  })
+}
+
+/** Contabilidad: registra el comprobante de la compra en el registro de compras, o lo observa con su motivo. */
+export async function registrarComprobante(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const id = String(fd.get('compra_id'))
+    const observado = fd.get('estado') === 'observado'
+    const s = (k: string) => String(fd.get(k) ?? '').trim() || null
+    const n = (k: string) => num(String(fd.get(k) ?? '').replace(',', '.').trim())
+    const supabase = await createClient()
+    check(await supabase.rpc('fn_registrar_comprobante', observado
+      ? { p_compra: id, p_estado: 'observado', p_observacion: s('observacion') }
+      : {
+          p_compra: id, p_estado: 'registrado', p_tipo_sunat: s('tipo_sunat'), p_serie: s('serie'), p_numero: s('numero'),
+          p_fecha_emision: s('fecha_emision'), p_doc_tipo: s('doc_tipo'), p_doc_numero: s('doc_numero'), p_vendedor: s('vendedor'),
+          p_base: n('base'), p_igv: n('igv'), p_total: n('total'), p_periodo: s('periodo'),
+        }))
+    revalidatePath(`/compras/${id}`)
+    revalidatePath('/carpetas')
+    return { message: observado ? 'Comprobante observado: Logística verá el motivo en la carpeta.' : 'Comprobante registrado.' }
   })
 }

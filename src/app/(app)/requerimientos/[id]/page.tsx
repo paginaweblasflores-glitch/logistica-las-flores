@@ -15,6 +15,7 @@ import { PrintButton } from '@/components/print-button'
 import { Aprobacion } from './aprobacion'
 import { RequerimientoAlmacen, type DetAlm, type CompraAlm } from './almacen'
 import { cambiarEstadoRequerimiento, cotizarRequerimiento } from '../actions'
+import { nombreComprobante } from '@/lib/documentos'
 
 export const metadata = { title: 'Requerimiento' }
 
@@ -68,7 +69,6 @@ export default async function RequerimientoPage({ params }: {
   const detCompras = vigentes as unknown as CC[]
   const cantComprada = (d: CD) => Number(d.cantidad_recibida ?? d.cantidad_solicitada)
   const totalComprado = detCompras.reduce((s, c) => s + c.compra_detalle.reduce((t, d) => t + cantComprada(d) * Number(d.precio_unitario), 0), 0)
-  const DOC: Record<string, string> = { factura: 'Factura', boleta: 'Boleta', guia: 'Guía', ticket: 'Ticket', recibo: 'Recibo', sin_documento: 'Sin documento' }
   const cotVigente = (cots ?? []).find((c) => c.estado !== 'anulada')
   const negocio = etiquetaNegocio({ nombre: loc?.nombre ?? '', ruc: empresa?.ruc, razon_social: empresa?.razon_social })
 
@@ -177,7 +177,7 @@ export default async function RequerimientoPage({ params }: {
                       {i === 0 && <>
                         <td rowSpan={c.compra_detalle.length} className="border border-line px-2 py-1.5 align-top font-semibold">{c.numero}<span className="block font-normal text-muted">{fmtDate(c.fecha)}</span></td>
                         <td rowSpan={c.compra_detalle.length} className="border border-line px-2 py-1.5 align-top">{c.proveedor?.razon_social ?? '—'}{c.proveedor?.ruc && <span className="block text-muted">RUC {c.proveedor.ruc}</span>}</td>
-                        <td rowSpan={c.compra_detalle.length} className="border border-line px-2 py-1.5 align-top">{c.tipo_documento ? DOC[c.tipo_documento] ?? c.tipo_documento : '—'}{c.numero_documento && <span className="block">{c.numero_documento}</span>}</td>
+                        <td rowSpan={c.compra_detalle.length} className="border border-line px-2 py-1.5 align-top">{nombreComprobante(c.tipo_documento) ?? '—'}{c.numero_documento && <span className="block">{c.numero_documento}</span>}</td>
                       </>}
                       <td className="border border-line px-2 py-1.5">{d.producto?.nombre ?? d.descripcion}</td>
                       <td className="border border-line px-2 py-1.5 text-right tabular">{fmtQty(cantComprada(d))} {d.producto?.unidad.codigo ?? d.unidad_texto ?? ''}</td>

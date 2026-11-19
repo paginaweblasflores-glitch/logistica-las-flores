@@ -3,7 +3,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { etiquetaNegocio } from '@/lib/empresa'
 
-export type Opcion = { id: string; nombre: string; local_id?: string | null; codigo?: string; tipo?: string }
+export type Opcion = { id: string; nombre: string; local_id?: string | null; codigo?: string; tipo?: string; zona?: string | null }
 
 /** Almacenes visibles (opcionalmente del negocio seleccionado) */
 export const getAlmacenes = cache(async (localId?: string | null, tipos?: string[]) => {
@@ -52,10 +52,11 @@ export const getCiudades = cache(async () => {
 
 export const getCategorias = cache(async () => {
   const supabase = await createClient()
-  const { data, error } = await supabase.from('categoria').select('id, nombre, padre:padre_id(nombre)').order('nombre')
+  const { data, error } = await supabase.from('categoria').select('id, nombre, zona, padre:padre_id(nombre)').order('nombre')
   if (error) throw error
-  return ((data ?? []) as unknown as { id: string; nombre: string; padre: { nombre: string } | null }[])
-    .map((c) => ({ id: c.id, nombre: c.padre ? `${c.padre.nombre} › ${c.nombre}` : c.nombre }))
+  // con su zona sanitaria: el formulario del producto avisa dónde se guarda
+  return ((data ?? []) as unknown as { id: string; nombre: string; zona: string | null; padre: { nombre: string } | null }[])
+    .map((c) => ({ id: c.id, nombre: c.padre ? `${c.padre.nombre} › ${c.nombre}` : c.nombre, zona: c.zona }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 })
 

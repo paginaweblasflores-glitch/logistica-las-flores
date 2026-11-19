@@ -1,18 +1,21 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ShoppingCart, Truck, PackageCheck } from 'lucide-react'
+import { ShoppingCart, Truck, PackageCheck, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getProveedores, getCiudades } from '@/lib/queries'
 import { getPanel, getLocales, getAlmacenActivo } from '@/lib/session'
 import { etiquetaNegocio } from '@/lib/empresa'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, Stat, Note } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, Stat, Note, LinkButton } from '@/components/ui'
+import { carpetaDeCompra, type Contable, type DocCarpeta, type TipoDocCarpeta } from '@/lib/carpeta'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { Recepcion } from './recepcion'
 import { AgregarTramo } from './agregar-tramo'
 import { ResumenCompra, type FleteResumen } from './resumen'
+import { Carpeta } from './carpeta'
+import { RegistroContableForm, type RegistroContable } from './registro-contable'
 import { anularCompra, aprobarCompra } from '../actions'
 
 export const metadata = { title: 'Compra' }
@@ -21,36 +24,67 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
   const { id } = await params
   const supabase = await createClient()
   // todo lo de la compra al mismo tiempo (antes eran 4 consultas en fila)
-  const [{ data: c }, { data: det }, { data: fletes }, transportistas, ciudades, { data: extra }, panel, locales, almacenSel] = await Promise.all([
+  const [{ data: c }, { data: det }, { data: fletes }, transportistas, ciudades, { data: extra }, panel, locales, almacenSel, { data: docs }, { data: entradas }, { data: contable }] = await Promise.all([
     supabase.from('v_compra_resumen').select('*').eq('id', id).maybeSingle(),
     supabase.from('v_compra_detalle').select('id, producto_id, producto, producto_codigo, fuera_de_catalogo, unidad, cantidad_solicitada, cantidad_recibida, precio_unitario, precio_anterior, variacion, variacion_pct, importe, fecha_vencimiento').eq('compra_id', id),
     supabase.from('transporte').select('id, fecha, costo, peso_kg, bultos, documento, destino, transportista, proveedor:transportista_id(razon_social), ciudad:ciudad_origen_id(nombre)').eq('compra_id', id).order('fecha').order('created_at'),
     getProveedores(true), getCiudades(),
     // datos extra de la compra; por línea: el precio de la orden (si la boleta trajo otro) y si el producto controla vencimiento
     supabase.from('compra')
-      .select('observacion, fecha_compromiso, recibido_por, motivo_anulacion, requerimiento:requerimiento_id(id, numero, created_at, aprobado_at), cotizacion:cotizacion_id(id, numero), proveedor:proveedor_id(ruc), compra_detalle(id, precio_orden, cantidad_pedida, pedida:unidad_pedido_id(nombre), producto:producto_id(id, controla_lote))').eq('id', id).maybeSingle(),
+      .select('observacion, fecha_compromiso, recibido_por, motivo_anulacion, requerimiento:requerimiento_id(id, numero, created_at, aprobado_at), cotizacion:cotizacion_id(id, numero), proveedor:proveedor_id(ruc, dni), compra_detalle(id, precio_orden, cantidad_pedida, pedida:unidad_pedido_id(nombre), producto:producto_id(id, controla_lote))').eq('id', id).maybeSingle(),
     getPanel(), getLocales(), getAlmacenActivo(),
+    // carpeta de la compra: sus documentos y la nota de ingreso (la entrada al almacén)
+    supabase.from('compra_documento').select('tipo, estado, numero, fecha, monto, medio, nota, archivo_path, archivo_nombre, archivo_mime').eq('compra_id', id),
+    supabase.from('movimiento').select('id, numero').eq('referencia_tipo', 'compra').eq('referencia_id', id).eq('anulado', false).limit(1),
+    // lo que registró la contadora sobre el comprobante
+    supabase.from('compra_contable').select('estado, tipo_sunat, serie, numero, fecha_emision, doc_tipo, doc_numero, vendedor, base, igv, total, periodo, observacion').eq('compra_id', id).maybeSingle(),
   ])
   if (!c) notFound()
   const almacen = panel === 'almacen'
+  const logistica = panel === 'logistica'
+  const contabilidad = panel === 'contabilidad'
   const negocio = locales.find((l) => l.codigo === c.local_codigo)
   const lineasExtra = ((extra?.compra_detalle ?? []) as unknown as { id: string; precio_orden: number | null; cantidad_pedida: number | null; pedida: { nombre: string } | null; producto: { id: string; controla_lote: boolean } | null }[])
   const ordenDe = new Map(lineasExtra.map((x) => [x.id, x.precio_orden]))
   // lo que pidió el almacén tal cual, si fue en otra unidad (p. ej. 45 Kilo de un producto en sacos)
   const pedidoDe = new Map(lineasExtra.filter((x) => x.cantidad_pedida != null && x.pedida).map((x) => [x.id, x]))
-  const { data: receptor } = extra?.recibido_por ? await supabase.from('usuario').select('nombre').eq('id', extra.recibido_por).maybeSingle() : { data: null }
+  const documentos = (docs ?? []) as DocCarpeta[]
+  const conArchivo = documentos.filter((d) => d.archivo_path)
+  // segundo viaje (en paralelo): quién recibió y los enlaces temporales a los archivos de la carpeta (bucket privado)
+  const [{ data: receptor }, { data: firmados }] = await Promise.all([
+    extra?.recibido_por ? supabase.from('usuario').select('nombre').eq('id', extra.recibido_por).maybeSingle() : Promise.resolve({ data: null }),
+    conArchivo.length ? supabase.storage.from('documentos').createSignedUrls(conArchivo.map((d) => d.archivo_path!), 3600) : Promise.resolve({ data: [] }),
+  ])
+  const urlDe = new Map((firmados ?? []).map((f) => [f.path, f.signedUrl]))
 
   type Det = { id: string; producto_id: string | null; fuera_de_catalogo: boolean; producto: string; producto_codigo: string; unidad: string; cantidad_solicitada: number; cantidad_recibida: number | null
     precio_unitario: number; precio_anterior: number | null; variacion: number | null; variacion_pct: number | null; importe: number; fecha_vencimiento: string | null }
   const lineas = (det ?? []) as Det[]
   const req = (extra?.requerimiento as unknown as { id: string; numero: string; created_at: string; aprobado_at: string | null } | null)
+  const cotizacion = extra?.cotizacion as unknown as { id: string; numero: string } | null
+  const entrada = (entradas?.[0] ?? null) as { id: string; numero: string | null } | null
+  // lo que cada uno registra en la carpeta: Logística todo; el almacén la guía y el archivo del comprobante; la contadora solo consulta
+  const editables: TipoDocCarpeta[] = c.estado === 'anulada' || contabilidad ? [] : almacen ? ['guia', 'comprobante'] : ['proforma', 'comprobante', 'guia', 'pago']
+  const items = carpetaDeCompra({ ...c, cotizacion, entrada, contable: contable as Contable | null }, documentos)
+    // las cotizaciones son de Logística: la contadora ve su número, sin enlace
+    .map((it) => (contabilidad && it.enlace?.href.startsWith('/cotizaciones') ? { ...it, enlace: undefined, detalle: it.detalle ?? it.enlace.label } : it))
+  const carpeta = (
+    <>
+      {contabilidad && c.estado === 'recibida' && (
+        <RegistroContableForm compraId={id} inicial={contable as RegistroContable | null}
+          sugerido={sugerenciaContable(c, extra?.proveedor as unknown as { ruc: string | null; dni: string | null } | null)} />
+      )}
+      <Carpeta compraId={id} editables={editables} montoSugerido={Number(c.costo_total ?? c.total ?? 0)} hoy={hoyLima()}
+        items={items.map((it) => ({ ...it, url: it.doc?.archivo_path ? urlDe.get(it.doc.archivo_path) ?? null : null }))} />
+    </>
+  )
 
   // Recibida = cerrada: solo el resumen final (sin editar, sin más tramos, sin anular)
   if (c.estado === 'recibida') {
     return <ResumenCompra c={c} lineas={lineas.map((l) => ({ ...l, precio_orden: ordenDe.get(l.id) ?? null }))} recibidoPor={receptor?.nombre ?? null} id={id} fletes={(fletes ?? []) as unknown as FleteResumen[]} almacen={almacen}
       negocio={negocio ? etiquetaNegocio(negocio) : c.local_codigo} localCodigo={c.local_codigo}
       proveedorRuc={(extra?.proveedor as unknown as { ruc: string | null } | null)?.ruc ?? null}
-      requerimiento={req} cotizacion={(extra?.cotizacion as unknown as { id: string; numero: string } | null)}
+      requerimiento={contabilidad ? null : req} cotizacion={contabilidad ? null : cotizacion} carpeta={carpeta} volver={contabilidad ? { href: '/carpetas', label: 'Carpetas de compra' } : undefined}
       fechaCompromiso={extra?.fecha_compromiso ?? null} observacion={extra?.observacion ?? null} />
   }
   const umbral = 0.1
@@ -95,14 +129,15 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <PageHeader title={`Compra ${c.numero}`} back={almacen ? { href: '/entradas', label: 'Entradas' } : { href: '/compras', label: 'Órdenes de compra' }}
+      <PageHeader title={`Compra ${c.numero}`} back={almacen ? { href: '/entradas', label: 'Entradas' } : contabilidad ? { href: '/carpetas', label: 'Carpetas de compra' } : { href: '/compras', label: 'Órdenes de compra' }}
         description={<><b className="text-ink-900">{negocio ? etiquetaNegocio(negocio) : c.local_codigo}</b> · {c.proveedor ?? 'Sin proveedor'} · {c.ciudad ?? 'origen no indicado'} · {fmtDate(c.fecha)}{req && <> · Requerimiento <Link className="enlace" href={`/requerimientos/${req.id}`}>{req.numero}</Link></>}</>}
         actions={<>
           <EstadoBadge estado={c.estado} />
-          {!almacen && c.estado === 'borrador' && (
+          <LinkButton href={`/compras/${id}/orden`} variant="outline" size="sm"><Printer className="size-3.5" /> Imprimir OC</LinkButton>
+          {logistica && c.estado === 'borrador' && (
             <ActionForm action={aprobarCompra}><input type="hidden" name="id" value={id} /><SubmitButton variant="dark" size="sm">Aprobar compra</SubmitButton></ActionForm>
           )}
-          {!almacen && (c.estado === 'borrador' || c.estado === 'aprobada') && (
+          {logistica && (c.estado === 'borrador' || c.estado === 'aprobada') && (
             <ActionForm action={anularCompra}><input type="hidden" name="id" value={id} />
               <SubmitButton variant="danger" size="sm" confirm="¿Anular la compra? Ya no se podrá recibir ni continuar.">Anular</SubmitButton>
             </ActionForm>
@@ -147,6 +182,8 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
         {extra?.observacion && <p className="border-t border-line px-5 py-3 text-sm"><span className="text-muted">Observación:</span> {extra.observacion}</p>}
       </Section>
 
+      {carpeta}
+
       {/* Flete opcional y por tramos: se registra después de aprobar, cuando ocurre
           (p. ej. Shalom Lima → agencia Huamanga y luego taxi agencia → local). Si el proveedor entrega en el local, no va nada. */}
       {c.estado !== 'borrador' && (c.estado !== 'anulada' || !!fletes?.length) && (
@@ -161,7 +198,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
         ) : (
           <p className="px-5 py-4 text-sm text-muted">Sin flete.</p>
         )}
-        {!almacen && c.estado !== 'anulada' && (
+        {logistica && c.estado !== 'anulada' && (
           <AgregarTramo compraId={id} localId={c.local_id} transportistas={transportistas} ciudades={ciudades} hoy={hoyLima()} hayTramos={!!fletes?.length}
             ciudadInicial={ciudades.find((x) => x.id === c.ciudad_id)?.nombre} />
         )}
@@ -175,7 +212,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
       {almacen && c.estado === 'aprobada' && !c.solo_fuera_catalogo && esMiAlmacen && (
         <div className="mb-5"><Note>Cuando llegue, regístrela en <Link href={`/entradas/nueva?tipo=compra&compra=${id}`} className="enlace">Entradas → Compra con boleta</Link>: lo pedido ya viene cargado y usted completa lo de la boleta.</Note></div>
       )}
-      {!almacen && c.estado === 'aprobada' && c.solo_fuera_catalogo && (
+      {logistica && c.estado === 'aprobada' && c.solo_fuera_catalogo && (
         <Section icon={PackageCheck} title="Registrar llegada" className="mb-5">
           <Recepcion id={id} alStock={!c.solo_fuera_catalogo} doc={{ tipo: c.tipo_documento, numero: c.numero_documento }}
             lineas={lineas.map((l) => ({ id: l.id, producto: l.producto, unidad: l.unidad, pedido: Number(l.cantidad_solicitada), precio: Number(l.precio_unitario), conVencimiento: conLote.has(l.producto_id ?? '') }))} />
@@ -186,4 +223,23 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
       )}
     </>
   )
+}
+
+const SUNAT: Record<string, string> = { factura: '01', boleta: '03', liquidacion: '04', ticket: '12' }
+
+/** Lo que la contadora encuentra prellenado: lo que registró el almacén al recibir y los datos del proveedor. */
+function sugerenciaContable(
+  c: { tipo_documento: string | null; numero_documento: string | null; total_documento: number | null; total: number; fecha: string; fecha_entrega: string | null; proveedor: string | null },
+  prov: { ruc: string | null; dni: string | null } | null,
+): Omit<RegistroContable, 'estado' | 'observacion'> {
+  const tipo = c.tipo_documento ? SUNAT[c.tipo_documento] ?? null : null
+  const [serie, ...resto] = (c.numero_documento ?? '').split('-')
+  const total = Number(c.total_documento ?? c.total) || null
+  const base = total && tipo === '01' ? Math.round((total / 1.18) * 100) / 100 : total
+  const emision = c.fecha_entrega ? new Date(c.fecha_entrega).toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) : c.fecha
+  return {
+    tipo_sunat: tipo, serie: resto.length ? serie : null, numero: resto.length ? resto.join('-') : c.numero_documento,
+    fecha_emision: emision, doc_tipo: prov?.ruc ? 'RUC' : prov?.dni ? 'DNI' : null, doc_numero: prov?.ruc ?? prov?.dni ?? null,
+    vendedor: c.proveedor, base, igv: total && base != null ? Math.round((total - base) * 100) / 100 : null, total, periodo: emision.slice(0, 7),
+  }
 }

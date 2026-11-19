@@ -7,6 +7,7 @@ import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { UnidadCombobox, type UnidadOpc } from '@/components/unidad-combobox'
 import { Section } from '@/components/ui'
+import { zonaDe, SIN_ZONA } from '@/lib/zonas'
 import { guardarProducto } from './actions'
 
 export type Producto = {
@@ -44,6 +45,10 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
     return u ? { nombre: u.nombre, tipo: u.tipo ?? 'medida' } : null
   })
   const medidas = unidades.filter((u) => u.tipo === 'medida')
+  const [categoria, setCategoria] = useState(p.categoria_id ?? '')
+  const cat = categorias.find((c) => c.id === categoria)
+  // categoría nueva (recién escrita) o sin zona: se avisa que falta asignarla en Configuración
+  const zona = cat ? zonaDe(cat.zona) ?? SIN_ZONA : null
   return (
     <ActionForm action={guardarProducto} className="space-y-4">
       {p.id && <input type="hidden" name="id" value={p.id} />}
@@ -57,7 +62,10 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
             <div className="relative md:col-span-2"><label><span className="label">Nombre <span className="req">*</span></span>
               <input name="nombre" required defaultValue={p.nombre} autoFocus={crear && !soloLectura} onChange={alEscribirNombre ? (e) => alEscribirNombre(e.target.value) : undefined}
                 placeholder="Ej.: GASEOSA INCA KOLA X 1 LT" className="field" /></label>{avisoNombre}</div>
-            <label><span className="label">Categoría</span><Select name="categoria" options={categorias} defaultValue={p.categoria_id} placeholder="—" agregar="categoria" /></label>
+            <div><label><span className="label">Categoría</span><Select name="categoria" options={categorias} defaultValue={p.categoria_id} placeholder="—" agregar="categoria"
+              onChange={setCategoria} /></label>
+              {/* dónde se guarda en el almacén físico (zonas sanitarias: limpieza nunca junto a los alimentos) */}
+              {zona && <p className="mt-1 text-xs font-semibold" style={{ color: zona.color }} title={zona.recordatorio}>Zona: {zona.nombre}</p>}</div>
             <label><span className="label">Marca</span><input name="marca" defaultValue={p.marca ?? ''} className="field" /></label>
             {/* la unidad se elige o se escribe; si no existe, queda como unidad nueva */}
             <div><span className="label">Unidad <span className="req">*</span></span>

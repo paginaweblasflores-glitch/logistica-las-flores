@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Building2, ShoppingCart, TrendingUp, Phone } from 'lucide-react'
@@ -12,20 +13,24 @@ import { ProveedorForm, type Proveedor } from '../form'
 import { agregarContacto } from '../actions'
 import { PagedTable } from '@/components/pager'
 import { etiquetaTipo } from '@/lib/proveedor-tipo'
+import { getPanel } from '@/lib/session'
 
 export const metadata = { title: 'Proveedor' }
 
 export default async function ProveedorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const [{ data: p }, { data: compras }, { data: precios }, { data: contactos }, ciudades, locales, { data: ofertas }] = await Promise.all([
+  const [{ data: p }, { data: compras }, { data: precios }, { data: contactos }, ciudades, locales, { data: ofertas }, panel] = await Promise.all([
     supabase.from('proveedor').select('*').eq('id', id).maybeSingle(),
     supabase.from('v_compra_resumen').select('id, numero, fecha, local_codigo, estado, total, ahorro, on_time, in_full').eq('proveedor_id', id).order('fecha', { ascending: false }).limit(100),
     supabase.from('v_trazabilidad_precios').select('id, producto_id, producto, unidad, fecha, precio, precio_anterior, variacion_pct').eq('proveedor_id', id).order('fecha', { ascending: false }).limit(60),
     supabase.from('proveedor_contacto').select('id, nombre, telefono, email, local:local_id(codigo)').eq('proveedor_id', id),
     getCiudades(), getLocalesOpc(),
     supabase.from('cotizacion_oferta').select('id, cotizacion_id').eq('proveedor_id', id),
+    getPanel(),
   ])
+  // la contadora solo consulta (RUC o DNI, dirección, compras)
+  const consulta = panel === 'contabilidad'
   if (!p) notFound()
   type C = { id: string; numero: string; fecha: string; local_codigo: string; estado: string; total: number; ahorro: number | null; on_time: boolean | null; in_full: boolean | null }
   const cs = (compras ?? []) as C[]
@@ -43,7 +48,7 @@ export default async function ProveedorPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <PageHeader title={p.razon_social} back={{ href: '/proveedores', label: 'Proveedores' }}
-        description={<>{etiquetaTipo(p.tipo)} · {p.subcategoria ?? 'Sin rubro'}{p.ruc ? ` · RUC ${p.ruc}` : ''}{p.es_transportista ? ' · hace fletes' : ''} · <Badge tone={p.activo ? 'green' : 'gray'}>{p.activo ? 'Activo' : 'Inactivo'}</Badge></>} />
+        description={<>{etiquetaTipo(p.tipo)} · {p.subcategoria ?? 'Sin rubro'}{p.ruc ? ` · RUC ${p.ruc}` : ''}{p.dni ? ` · DNI ${p.dni}` : ''}{p.es_transportista ? ' · hace fletes' : ''} · <Badge tone={p.activo ? 'green' : 'gray'}>{p.activo ? 'Activo' : 'Inactivo'}</Badge></>} />
       <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat label="Compras" value={validas.length} hint={`Desde ${fmtDate(p.fecha_registro)}`} />
         <Stat label="Monto comprado" value={fmtSoles(total)} />
@@ -74,7 +79,15 @@ export default async function ProveedorPage({ params }: { params: Promise<{ id: 
           </Section>
         </div>
         <div className="space-y-5">
-          <Section icon={Building2} title="Datos del proveedor"><ProveedorForm p={p as Proveedor} ciudades={ciudades} /></Section>
+          <Section icon={Building2} title="Datos del proveedor">
+            {consulta ? (
+              <dl className="grid grid-cols-[130px_1fr] gap-x-3 gap-y-1.5 text-sm">
+                {([['Razón social', p.razon_social], ['RUC', p.ruc], ['DNI', p.dni], ['Nombre comercial', p.nombre_comercial], ['Dirección', p.direccion],
+                  ['Teléfono', p.telefono], ['Correo', p.email], ['Condiciones de pago', p.condiciones_pago], ['Banco', p.banco], ['N° de cuenta', p.numero_cuenta]] as [string, string | null][])
+                  .map(([k, v]) => <Fragment key={k}><dt className="text-muted">{k}</dt><dd>{v || '—'}</dd></Fragment>)}
+              </dl>
+            ) : <ProveedorForm p={p as Proveedor} ciudades={ciudades} />}
+          </Section>
           <Section icon={Phone} title="Contactos por negocio">
             <ul className="mb-4 space-y-2 text-sm">
               {(contactos as unknown as { id: string; nombre: string | null; telefono: string | null; email: string | null; local: { codigo: string } | null }[] ?? []).map((c) => (
@@ -84,13 +97,13 @@ export default async function ProveedorPage({ params }: { params: Promise<{ id: 
               ))}
               {!contactos?.length && <li className="text-muted">Sin contactos adicionales. {p.contacto && <>Contacto principal: <b>{p.contacto}</b> {p.telefono}</>}</li>}
             </ul>
-            <ActionForm action={agregarContacto} resetOnSuccess className="grid gap-2 sm:grid-cols-2">
+            {!consulta && <ActionForm action={agregarContacto} resetOnSuccess className="grid gap-2 sm:grid-cols-2">
               <input type="hidden" name="proveedor_id" value={id} />
               <input name="nombre" placeholder="Nombre" className="field" required />
               <input name="telefono" placeholder="Teléfono" className="field" />
               <Select name="local_id" options={locales} placeholder="Ambos negocios" />
               <SubmitButton variant="outline">Agregar contacto</SubmitButton>
-            </ActionForm>
+            </ActionForm>}
           </Section>
         </div>
       </div>

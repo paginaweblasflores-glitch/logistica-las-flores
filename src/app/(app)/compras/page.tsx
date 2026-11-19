@@ -6,6 +6,7 @@ import { getAmbito, getPanel } from '@/lib/session'
 import { getCiudades, getProveedores } from '@/lib/queries'
 import { fmtDate, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
+import { avanceCarpeta, carpetaDeCompra, type Contable, type DocCarpeta } from '@/lib/carpeta'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, FiltroFechas, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
 import { Select } from '@/components/select'
@@ -25,7 +26,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   const desde = sp(params, 'desde', `${hoyLima().slice(0, 4)}-01-01`), hasta = sp(params, 'hasta', hoyLima())
 
   let q = supabase.from('v_compra_resumen')
-    .select('id, numero, fecha, local_codigo, proveedor, proveedor_id, ciudad, estado, tipo_documento, numero_documento, items, total, ahorro, costo_transporte, on_time, in_full, horas_entrega, fecha_objetivo, diferencias_precio', { count: 'exact' })
+    .select('id, numero, fecha, local_codigo, proveedor, proveedor_id, ciudad, estado, tipo_documento, numero_documento, items, total, ahorro, costo_transporte, on_time, in_full, horas_entrega, fecha_objetivo, diferencias_precio, solo_fuera_catalogo, cotizacion_id, compra_documento(tipo, estado, numero, fecha, monto, medio, nota, archivo_path, archivo_nombre, archivo_mime), compra_contable(estado, observacion, serie, numero)', { count: 'exact' })
     .gte('fecha', desde).lte('fecha', hasta)
   if (local) q = q.eq('local_id', local.id)
   // los ingresos directos del almacén (sin orden) se ven en «Ingresos de almacén», no aquí
@@ -39,11 +40,16 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
     supabase.rpc('fn_compras_resumen', { p_local: local?.id ?? null, p_desde: desde, p_hasta: hasta }),
     getProveedores(), getCiudades(),
   ])
+  // avance de la carpeta de cada compra (sus documentos vienen en la misma consulta)
+  const avance = (r: Row) => avanceCarpeta(carpetaDeCompra({ ...r, sin_orden: false, cotizacion: r.cotizacion_id ? { id: r.cotizacion_id, numero: '' } : null, contable: Array.isArray(r.compra_contable) ? r.compra_contable[0] ?? null : r.compra_contable }, r.compra_documento))
   const c = resumen as { total: number; transporte: number; ahorro: number; sobrecosto: number; cantidad: number } | null
 
   type Row = { id: string; numero: string; fecha: string; local_codigo: string; proveedor: string | null; proveedor_id: string | null; ciudad: string | null; estado: string
     tipo_documento: string | null; numero_documento: string | null; items: number; total: number; ahorro: number | null; costo_transporte: number
-    on_time: boolean | null; in_full: boolean | null; horas_entrega: number | null; fecha_objetivo: string | null; diferencias_precio: number }
+    on_time: boolean | null; in_full: boolean | null; horas_entrega: number | null; fecha_objetivo: string | null; diferencias_precio: number
+    solo_fuera_catalogo: boolean; cotizacion_id: string | null; compra_documento: DocCarpeta[]
+    /** desde la vista llega como lista (0 o 1 registro) */
+    compra_contable: Contable[] | Contable | null }
 
   return (
     <>
@@ -65,9 +71,9 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
         {data?.length ? (
           <>
             <Table>
-              <thead><tr><Th>N°</Th><Th>Fecha</Th><Th>Negocio</Th><Th>Proveedor</Th><Th>Origen</Th><Th>Documento</Th><Th right>Total</Th><Th right>Ahorro</Th><Th>Entrega</Th><Th>Estado</Th></tr></thead>
+              <thead><tr><Th>N°</Th><Th>Fecha</Th><Th>Negocio</Th><Th>Proveedor</Th><Th>Origen</Th><Th>Documento</Th><Th right>Total</Th><Th right>Ahorro</Th><Th>Entrega</Th><Th>Carpeta</Th><Th>Estado</Th></tr></thead>
               <tbody>
-                {(data as Row[]).map((r) => (
+                {(data as unknown as Row[]).map((r) => (
                   <tr key={r.id} className="hover:bg-canvas/60">
                     <Td><Link href={`/compras/${r.id}`} className="enlace">{r.numero}</Link>
                       {r.diferencias_precio > 0 && <span className="mt-0.5 block"><Badge tone="amber">Precio ≠ orden</Badge></span>}</Td>
@@ -84,6 +90,8 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
                         {r.in_full === false && <Badge tone="amber">Incompleta</Badge>}
                       </span>
                     )}</Td>
+                    <Td>{r.estado === 'anulada' ? <span className="text-xs text-muted">—</span> : (() => { const a = avance(r)
+                      return <Badge tone={a.invalido ? 'red' : a.listos === a.total ? 'green' : r.estado === 'recibida' ? 'amber' : 'gray'}>{a.listos}/{a.total}{a.invalido ? ' · sin comprobante' : ''}</Badge> })()}</Td>
                     <Td><EstadoBadge estado={r.estado} /></Td>
                   </tr>
                 ))}

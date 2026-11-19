@@ -5,11 +5,14 @@
  *  - almacén: un usuario por negocio (Almacén Las Flores / Almacén Umaru). Registra entradas, salidas,
  *    traspasos, recepción de compras y su catálogo local.
  *  - área: usuario compartido "Jefe de Area" (el personal rota). Solo crea requerimientos y ve su estado.
+ *  - contabilidad: la contadora. Solo los documentos de las compras (carpetas) y el registro de sus comprobantes;
+ *    no maneja dinero, stock ni requerimientos.
  * Conteos, descuentos, Producción (carnes), bebidas y roturas viven en otro sistema (conteo-las-flores).
  */
-export type Panel = 'logistica' | 'almacen' | 'area'
+export type Panel = 'logistica' | 'almacen' | 'area' | 'contabilidad'
 
-export const panelDe = (rol: string): Panel => (rol === 'almacen' ? 'almacen' : rol === 'jefe_area' ? 'area' : 'logistica')
+export const panelDe = (rol: string): Panel =>
+  rol === 'almacen' ? 'almacen' : rol === 'jefe_area' ? 'area' : rol === 'contabilidad' ? 'contabilidad' : 'logistica'
 
 /** Roles de OTROS sistemas (p. ej. Producción → sistema de conteos): no entran a Logística. */
 export const ROLES_OTRO_SISTEMA = ['produccion']
@@ -28,13 +31,22 @@ const SOLO_ALMACEN = ['/entradas/nueva', '/salidas/nueva', '/traslados/nuevo', '
 
 const coincide = (path: string, base: string) => path === base || path.startsWith(base + '/')
 
+/** La contadora: su inicio, las carpetas, la ficha de cada compra (con su OC y su nota de ingreso) y los proveedores (consulta). */
+const esDeContabilidad = (path: string) =>
+  path === '/' || coincide(path, '/carpetas')
+  || (path.startsWith('/compras/') && !coincide(path, '/compras/nueva'))
+  || (path.startsWith('/entradas/') && !coincide(path, '/entradas/nueva'))
+  || (coincide(path, '/proveedores') && !coincide(path, '/proveedores/nuevo'))
+
 export function rutaPermitida(panel: Panel, path: string | null) {
   if (!path) return true
   if (panel === 'area') return coincide(path, '/requerimientos')
+  if (panel === 'contabilidad') return esDeContabilidad(path)
   if (panel === 'almacen') return !SOLO_LOGISTICA.some((b) => coincide(path, b))
   return !SOLO_ALMACEN.some((b) => coincide(path, b))
 }
 
 /** Lo que dice debajo de «Las Flores» en la barra lateral. */
 export const subtituloDe = (panel: Panel, negocio?: string | null) =>
-  panel === 'almacen' ? `Almacén ${negocio === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área' : 'Logística'
+  panel === 'almacen' ? `Almacén ${negocio === 'UM' ? 'Umaru' : 'Las Flores'}` : panel === 'area' ? 'Jefes de área'
+    : panel === 'contabilidad' ? 'Contabilidad' : 'Logística'

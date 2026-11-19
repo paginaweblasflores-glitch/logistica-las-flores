@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { CheckCircle2 } from 'lucide-react'
 import { fmtDate, fmtPct, fmtQty, fmtSoles } from '@/lib/format'
 import { LOGO_DOC } from '@/lib/empresa'
+import { nombreComprobante } from '@/lib/documentos'
 import { PageHeader, EstadoBadge, Badge, LinkButton } from '@/components/ui'
 import { PrintButton } from '@/components/print-button'
 import { AnularConMotivo } from '@/components/anular-con-motivo'
@@ -14,7 +15,6 @@ export type LineaResumen = { id: string; producto_id: string | null; producto: s
 export type FleteResumen = { id: string; fecha: string; costo: number; documento: string | null; destino: string | null; transportista: string | null
   proveedor: { razon_social: string } | null; ciudad: { nombre: string } | null }
 
-const DOC: Record<string, string> = { factura: 'Factura', boleta: 'Boleta', guia: 'Guía', ticket: 'Ticket', recibo: 'Recibo', sin_documento: 'Sin documento' }
 
 /**
  * Compra recibida = compra CERRADA. Ya no se edita: se muestra el resumen final con todos sus datos
@@ -26,7 +26,7 @@ function horasDesde(desde: string, hasta: string) {
   return h < 48 ? `${h.toFixed(1)} h` : `${Math.round(h / 24)} días`
 }
 
-export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveedorRuc, requerimiento, cotizacion, fechaCompromiso, observacion, almacen, recibidoPor, id }: {
+export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveedorRuc, requerimiento, cotizacion, fechaCompromiso, observacion, almacen, recibidoPor, id, carpeta, volver }: {
   c: {
     numero: string; fecha: string; estado: string; proveedor: string | null; ciudad: string | null; tipo_documento: string | null; numero_documento: string | null
     forma_pago: string | null; fecha_aprobacion: string | null; fecha_entrega: string | null; fecha_objetivo: string | null; total: number
@@ -36,6 +36,10 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
   lineas: LineaResumen[]; fletes: FleteResumen[]; negocio: string; localCodigo: string; proveedorRuc: string | null
   requerimiento: { id: string; numero: string; created_at?: string; aprobado_at?: string | null } | null; cotizacion: { id: string; numero: string } | null
   fechaCompromiso: string | null; observacion: string | null; almacen: boolean; recibidoPor?: string | null; id?: string
+  /** carpeta de la compra (sus 6 documentos): en pantalla, no se imprime */
+  carpeta?: React.ReactNode
+  /** a dónde vuelve (la contadora vuelve a sus carpetas) */
+  volver?: { href: string; label: string }
 }) {
   const recibido = (l: LineaResumen) => Number(l.cantidad_recibida ?? 0)
   const hayVence = lineas.some((l) => l.fecha_vencimiento)
@@ -48,12 +52,13 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
 
   return (
     <>
-      <PageHeader title={`${directo ? 'Ingreso' : 'Compra'} ${c.numero}`} back={{ href: '/compras', label: almacen ? 'Recepción de compras' : 'Compras' }}
+      <PageHeader title={`${directo ? 'Ingreso' : 'Compra'} ${c.numero}`} back={volver ?? { href: '/compras', label: almacen ? 'Recepción de compras' : 'Compras' }}
         description={directo ? 'Ingreso directo del almacén (sin orden de compra). Este es su resumen.' : 'Compra cerrada: la mercadería ya llegó. Este es su resumen final.'}
         actions={<>
           <EstadoBadge estado={c.estado} />
           {requerimiento && <LinkButton href={`/requerimientos/${requerimiento.id}`} variant="outline">Ver requerimiento {requerimiento.numero}</LinkButton>}
-          <PrintButton label="Imprimir" />
+          {!directo && id && <LinkButton href={`/compras/${id}/orden`} variant="outline">Orden de compra</LinkButton>}
+          <PrintButton label="Imprimir resumen" />
           {/* un ingreso directo registrado por error lo anula el almacén que lo registró (con motivo) */}
           {almacen && directo && id && (
             <AnularConMotivo action={anularIngreso} campos={{ id }} className={btnClass('outline')} titulo={`Anular el ingreso ${c.numero}`}
@@ -75,6 +80,8 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
         </div>
       )}
 
+      {carpeta}
+
       {/* Documento imprimible */}
       <section className="documento card print-area p-6 sm:p-8">
         <header className="mb-5 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-4">
@@ -91,7 +98,7 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
             <p className="border-b border-line bg-canvas px-3 py-1.5 text-xs font-bold tracking-wide uppercase">1. Proveedor y documento</p>
             <dl className="grid grid-cols-[130px_1fr] gap-x-2 gap-y-1 px-3 py-2">
               <dt className="text-muted">Proveedor</dt><dd className="font-semibold">{c.proveedor ?? '—'}{proveedorRuc && <span className="font-normal text-muted"> · RUC {proveedorRuc}</span>}</dd>
-              <dt className="text-muted">Documento</dt><dd>{c.tipo_documento ? DOC[c.tipo_documento] ?? c.tipo_documento : '—'} {c.numero_documento ?? ''}{c.total_documento != null && <span className="text-muted"> · total {fmtSoles(c.total_documento)}</span>}</dd>
+              <dt className="text-muted">Documento</dt><dd>{nombreComprobante(c.tipo_documento) ?? '—'} {c.numero_documento ?? ''}{c.total_documento != null && <span className="text-muted"> · total {fmtSoles(c.total_documento)}</span>}</dd>
               <dt className="text-muted">Forma de pago</dt><dd>{c.forma_pago ?? '—'}</dd>
               <dt className="text-muted">Origen</dt><dd>{c.ciudad ?? '—'}</dd>
               {requerimiento && <><dt className="text-muted">Requerimiento</dt><dd><Link href={`/requerimientos/${requerimiento.id}`} className="print:text-ink-900 enlace">{requerimiento.numero}</Link></dd></>}

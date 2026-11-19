@@ -11,7 +11,7 @@ import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 import { ProductoFoto } from '@/components/producto-foto'
 import { TablaPorCategoria } from '@/components/tabla-por-categoria'
-import { agruparPorCategoria } from '@/lib/categorias'
+import { agruparPorZona } from '@/lib/categorias'
 
 export const metadata = { title: 'Catálogo' }
 
@@ -35,7 +35,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
 
   // Datos del producto que muestra la tabla (con su stock en los almacenes del panel)
   const CAMPOS = `id, codigo, nombre, tipo, marca, costo_referencia, es_perecible, controla_lote, activo, imagen_url,
-    unidad:unidad_id(codigo), categoria:categoria_id(nombre), negocios:producto_local(codigo, local:local_id(codigo))
+    unidad:unidad_id(codigo), categoria:categoria_id(nombre, zona), negocios:producto_local(codigo, local:local_id(codigo))
     ${almacen && almIds.length ? ', st:stock(almacen_id, cantidad)' : ''}${unidadFiltro ? ', und:unidad_id!inner(codigo)' : ''}`
 
   // Orden por código, del más nuevo al más antiguo (483, 482… 1): el del almacén elegido o el de la maestra del negocio.
@@ -105,7 +105,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
   const sinCantidad = Math.max(0, Number(enEsteAlmacen ?? 0) - Number(conCantidad ?? 0))
   type P = { id: string; codigo: string; nombre: string; tipo: string; marca: string | null; costo_referencia: number
     es_perecible: boolean; controla_lote: boolean; activo: boolean; imagen_url: string | null; unidad: { codigo: string }
-    categoria: { nombre: string } | null; negocios: { codigo: number | null; local: { codigo: string } }[]; en_almacen?: { codigo: number | null }[]
+    categoria: { nombre: string; zona: string | null } | null; negocios: { codigo: number | null; local: { codigo: string } }[]; en_almacen?: { codigo: number | null }[]
     st?: { almacen_id: string; cantidad: number }[] }
   const porId = new Map((data as unknown as P[]).map((p) => [p.id, p]))
   // el Catálogo no muestra cantidades (eso es Inventario): solo si ya se puso el stock inicial (fila de stock = puesto, bloqueado)
@@ -166,10 +166,10 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
         actions={sinNegocio ? <Link href="/productos" className="text-xs enlace">Ver todos</Link> : undefined}>
         {data?.length ? (
           almacen ? (
-            // el almacén ve su catálogo organizado por categoría (cada una se abre y se cierra)
-            <TablaPorCategoria columnas={5} head={<tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}{!almacen && <Th>Categoría</Th>}<Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr>}
-              grupos={agruparPorCategoria(data as unknown as P[], (p) => p.categoria?.nombre).map(([cat, ps]) => ({
-                categoria: cat, cantidad: ps.length, filas: ps.map((p) => fila(p)),
+            // el almacén ve su catálogo como el almacén físico: por zona sanitaria y, dentro, por categoría
+            <TablaPorCategoria id="catalogo" columnas={5} anchos={['4.5rem', undefined, '6rem', '9rem', '8rem']} head={<tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}{!almacen && <Th>Categoría</Th>}<Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr>}
+              zonas={agruparPorZona(data as unknown as P[], (p) => p.categoria?.zona, (p) => p.categoria?.nombre).map((z) => ({
+                zona: z.zona, categorias: z.categorias.map(([cat, ps]) => ({ categoria: cat, cantidad: ps.length, filas: ps.map((p) => fila(p)) })),
               }))} />
           ) : (
           <>

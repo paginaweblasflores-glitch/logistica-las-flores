@@ -9,6 +9,7 @@ import { fmtSoles, ahoraLima } from '@/lib/format'
 import { recibirCompra } from '../actions'
 import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
+import { CampoGuia } from '@/components/campo-guia'
 import { TotalComprobante } from '@/components/total-comprobante'
 
 type LineaRec = { id: string; producto: string; unidad: string; pedido: number; precio: number
@@ -48,7 +49,7 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="lineas" value={JSON.stringify(payload)} />
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {cambiarDoc ? <>
           <label><span className="label">Comprobante</span>
             <Select name="tipo_documento" options={COMPROBANTES} defaultValue={doc?.tipo ?? 'boleta'} required /></label>
@@ -62,6 +63,7 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
         )}
         <TotalComprobante suma={suma} onEscrito={setTotalBoleta} />
         <label><span className="label">Fecha y hora de llegada</span><input type="datetime-local" name="fecha_entrega" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_entrega_inicial" value={ahora} /></label>
+        <CampoGuia />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-line">

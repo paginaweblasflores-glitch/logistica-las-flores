@@ -5,6 +5,7 @@ import { ShoppingCart, ClipboardCheck, TrendingUp, Layers, Truck, Target, BellRi
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel } from '@/lib/session'
 import { PanelAlmacen } from './panel-almacen'
+import { PanelContabilidad } from './panel-contabilidad'
 import { etiquetaNegocio } from '@/lib/empresa'
 import { resolverPeriodo } from '@/lib/periodo'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, fmtSolesCompact, MESES_CORTO } from '@/lib/format'
@@ -48,8 +49,11 @@ export default function DashboardPage({ searchParams }: { searchParams: Promise<
 
 async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
+  const panel = await getPanel()
+  // la contadora: su registro de compras
+  if (panel === 'contabilidad') return <PanelContabilidad />
   // Usuarios de almacén: su propio panel
-  if ((await getPanel()) === 'almacen') {
+  if (panel === 'almacen') {
     const { local } = await getAmbito()
     if (local) return <PanelAlmacen local={local} />
   }

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Boxes, ShoppingCart, BarChart3, Settings,
-  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, type LucideIcon,
+  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, FolderOpen, Building2, type LucideIcon,
 } from 'lucide-react'
 import type { Panel } from '@/lib/panel'
 
@@ -71,7 +71,15 @@ export const NAV_AREA: NavModule[] = [
   { label: 'Requerimientos enviados', icon: ClipboardList, href: '/requerimientos' },
 ]
 
-export const navDe = (panel: Panel) => (panel === 'almacen' ? NAV_ALMACEN : panel === 'area' ? NAV_AREA : NAV)
+/** Menú de CONTABILIDAD: solo los documentos de las compras. */
+export const NAV_CONTABILIDAD: NavModule[] = [
+  { label: 'Inicio', icon: LayoutDashboard, href: '/' },
+  { label: 'Carpetas de compra', icon: FolderOpen, href: '/carpetas' },
+  { label: 'Proveedores', icon: Building2, href: '/proveedores' },
+]
+
+export const navDe = (panel: Panel) =>
+  panel === 'almacen' ? NAV_ALMACEN : panel === 'area' ? NAV_AREA : panel === 'contabilidad' ? NAV_CONTABILIDAD : NAV
 
 /** ¿La ruta actual corresponde a este enlace? (incluye sus fichas de detalle: /compras/123) */
 export function rutaActiva(pathname: string, href: string) {
