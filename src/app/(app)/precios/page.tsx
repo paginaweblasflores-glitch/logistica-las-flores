@@ -2,10 +2,11 @@ import Link from 'next/link'
 import { TrendingUp, ListOrdered, CalendarDays } from 'lucide-react'
 import { getAmbito, getLocales } from '@/lib/session'
 import { createClient } from '@/lib/supabase/server'
+import { getCategorias } from '@/lib/queries'
 import { fmtDate, fmtPct, fmtSoles, MESES } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
-import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, Badge, Stat, LocalBadge, Note } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, Badge, Stat, LocalBadge } from '@/components/ui'
 import { ProductPicker, type ProductoLite } from '@/components/product-picker'
 import { Lines, Bars } from '@/components/charts'
 import { ExportButton } from '@/components/export-button'
@@ -17,7 +18,7 @@ export const metadata = { title: 'Trazabilidad de precios' }
 export default async function PreciosPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
   const [supabase, { local }, locales] = await Promise.all([createClient(), getAmbito(), getLocales()])
-  const producto = sp(params, 'producto'), q = sp(params, 'q'), orden = sp(params, 'orden', 'variacion')
+  const producto = sp(params, 'producto'), q = sp(params, 'q'), orden = sp(params, 'orden', 'variacion'), categoria = sp(params, 'categoria')
   const { from, to } = paginar(params)
   const umbralQ = supabase.from('parametro').select('valor').eq('clave', 'umbral_alerta_precio').maybeSingle()
 
@@ -108,25 +109,28 @@ export default async function PreciosPage({ searchParams }: { searchParams: Prom
 
   let query = supabase.from('v_precio_estadistica').select('*', { count: 'exact' })
   if (q) query = query.ilike('producto', `%${q}%`)
+  if (categoria) query = query.eq('categoria', categoria)   // la misma categoría que en el Catálogo
   query = orden === 'variacion' ? query.order('variacion_pct', { ascending: false, nullsFirst: false })
         : orden === 'reciente' ? query.order('ultima_compra', { ascending: false }) : query.order('producto')
-  const [{ data, count }, { data: umbralRow }] = await Promise.all([query.range(from, to), umbralQ])
+  const [{ data, count }, { data: umbralRow }, categorias] = await Promise.all([query.range(from, to), umbralQ, getCategorias()])
   const umbral = Number(umbralRow?.valor ?? 0.1)
   type E = { producto_id: string; codigo: string; producto: string; unidad: string; categoria: string | null; compras: number; precio_min: number; precio_max: number
     precio_promedio: number; precio_actual: number; precio_inicial: number; ultima_compra: string; variacion_pct: number | null }
 
   return (
     <>
-      <PageHeader title="Trazabilidad y lista de precios"
-        description="Precio vigente de cada producto del almacén según su última compra, con mínimo, máximo, promedio y variación. Se alimenta sola cuando llega cada compra (los bienes fuera de catálogo no entran aquí)."
+      <PageHeader title="Trazabilidad de precios"
         actions={<ExportButton filename="lista_precios" table="v_precio_estadistica" order="producto"
           columns={{ codigo: 'Código', producto: 'Producto', categoria: 'Categoría', unidad: 'Unidad', precio_actual: 'Precio vigente', precio_min: 'Mínimo', precio_max: 'Máximo', precio_promedio: 'Promedio', variacion_pct: 'Variación %', compras: 'N° compras', ultima_compra: 'Última compra' }} />} />
-      <div className="mb-4"><Note>Se resaltan en rojo los productos cuyo precio subió más del <b>{fmtPct(umbral)}</b> (umbral configurable en Configuración). Haga clic en un producto para ver su línea evolutiva.</Note></div>
       <FilterBar>
         <FilterField label="Buscar producto" className="min-w-64"><input name="q" defaultValue={q} className="field" /></FilterField>
+        <FilterField label="Categoría" className="min-w-56"><Select name="categoria" options={categorias.map((c) => ({ id: c.nombre, nombre: c.nombre }))} defaultValue={categoria} placeholder="Todas" /></FilterField>
         <FilterField label="Ordenar por"><Select name="orden" defaultValue={orden} required options={[{ id: 'variacion', nombre: 'Mayor variación' }, { id: 'reciente', nombre: 'Compra más reciente' }, { id: 'nombre', nombre: 'Nombre' }]} /></FilterField>
       </FilterBar>
-      <Section icon={ListOrdered} title="Lista general de precios" bodyClassName="p-0" stats={[{ label: 'Productos', value: count ?? 0 }]}>
+      <Section icon={ListOrdered} title="Lista general de precios" bodyClassName="p-0"
+        stats={[{ label: 'Productos', value: count ?? 0 },
+          // en rojo los que subieron más que el umbral (se cambia en Configuración)
+          { label: 'Alerta desde', value: <span title="Se resaltan en rojo los productos cuyo precio subió más que este porcentaje. Se cambia en Configuración.">{fmtPct(umbral)}</span> }]}>
         {data?.length ? (
           <>
             <Table>

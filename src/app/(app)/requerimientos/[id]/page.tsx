@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -79,8 +78,7 @@ export default async function RequerimientoPage({ params }: {
         actions={<>
           <EstadoBadge estado={r.estado} />
           {/* antes de aprobar: la hoja para las firmas (Fernanda la lleva a la reunión); ya comprado: con el detalle de la compra */}
-          {gestiona && r.estado === 'solicitado' && <PrintButton label="Imprimir" />}
-          {comprado && <PrintButton label="Imprimir requerimiento" />}
+          {(gestiona && r.estado === 'solicitado') || comprado ? <PrintButton label="Imprimir" /> : null}
           {/* Cada paso habilita solo el siguiente; lo anterior queda de solo lectura */}
           {gestiona && r.estado === 'aprobado' && !compraVigente && !cotVigente && <>
             <ActionForm action={cotizarRequerimiento}><input type="hidden" name="id" value={id} />
@@ -220,10 +218,6 @@ export default async function RequerimientoPage({ params }: {
           })}
         </div>
 
-        {(compras?.length || cots?.length) ? (
-          <p className="no-print mt-6 text-xs text-muted">Documentos: {cots?.map((c) => <Link key={c.id} href={`/cotizaciones/${c.id}`} className="mr-2 enlace">{c.numero}</Link>)}
-            {compras?.map((c) => <Link key={c.id} href={`/compras/${c.id}`} className="mr-2 enlace">{c.numero}</Link>)}</p>
-        ) : null}
       </section>
 
       {/* después de la reunión con la hoja impresa: se marca lo aprobado (no se imprime) */}

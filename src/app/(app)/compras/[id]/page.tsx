@@ -95,7 +95,7 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <PageHeader title={`Compra ${c.numero}`} back={{ href: '/compras', label: almacen ? 'Recepción de compras' : 'Compras' }}
+      <PageHeader title={`Compra ${c.numero}`} back={almacen ? { href: '/entradas', label: 'Entradas' } : { href: '/compras', label: 'Órdenes de compra' }}
         description={<><b className="text-ink-900">{negocio ? etiquetaNegocio(negocio) : c.local_codigo}</b> · {c.proveedor ?? 'Sin proveedor'} · {c.ciudad ?? 'origen no indicado'} · {fmtDate(c.fecha)}{req && <> · Requerimiento <Link className="enlace" href={`/requerimientos/${req.id}`}>{req.numero}</Link></>}</>}
         actions={<>
           <EstadoBadge estado={c.estado} />

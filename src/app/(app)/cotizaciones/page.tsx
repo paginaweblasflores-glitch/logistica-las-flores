@@ -2,17 +2,24 @@ import Link from 'next/link'
 import { FileSpreadsheet, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito } from '@/lib/session'
-import { fmtDate, fmtSoles, fmtPct } from '@/lib/format'
-import { PageHeader, Section, Th, Td, EmptyState, LinkButton, EstadoBadge, LocalBadge } from '@/components/ui'
+import { fmtDate, fmtSoles, fmtPct, hoyLima } from '@/lib/format'
+import { sp } from '@/lib/utils'
+import { Select } from '@/components/select'
+import { PageHeader, Section, Th, Td, EmptyState, LinkButton, EstadoBadge, LocalBadge, FilterBar, FilterField, FiltroFechas } from '@/components/ui'
 import { PagedTable } from '@/components/pager'
 
 export const metadata = { title: 'Cotizaciones' }
 
-export default async function CotizacionesPage() {
-  const { local } = await getAmbito()
-  const supabase = await createClient()
+const ESTADOS = [{ id: 'abierta', nombre: 'Abierta' }, { id: 'adjudicada', nombre: 'Adjudicada' }, { id: 'anulada', nombre: 'Anulada' }]
+
+export default async function CotizacionesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  const [params, { local }, supabase] = await Promise.all([searchParams, getAmbito(), createClient()])
+  // como Compras: por defecto, lo del año
+  const estado = sp(params, 'estado'), desde = sp(params, 'desde', `${hoyLima().slice(0, 4)}-01-01`), hasta = sp(params, 'hasta', hoyLima())
   let q = supabase.from('v_cotizacion_ahorro').select('id, numero, fecha, local_id, titulo, estado, proveedor_aprobado, total_primera_ronda, total_adjudicado, ahorro')
+    .gte('fecha', desde).lte('fecha', hasta)
   if (local) q = q.or(`local_id.eq.${local.id},local_id.is.null`)
+  if (estado) q = q.eq('estado', estado)
   const [{ data }, { data: locales }] = await Promise.all([q.order('fecha', { ascending: false }).limit(200), supabase.from('local').select('id, codigo')])
   const cod = new Map((locales ?? []).map((l) => [l.id, l.codigo]))
   type Row = { id: string; numero: string; fecha: string; local_id: string | null; titulo: string; estado: string; proveedor_aprobado: string | null; total_primera_ronda: number | null; total_adjudicado: number | null; ahorro: number | null }
@@ -21,9 +28,13 @@ export default async function CotizacionesPage() {
 
   return (
     <>
-      <PageHeader title="Cotizaciones" description="Cuadro comparativo de proveedores y rondas de negociación. El ahorro = mejor oferta de la 1ª ronda − oferta adjudicada."
-        actions={<LinkButton href="/cotizaciones/nueva"><Plus className="size-4" /> Nueva cotización</LinkButton>} />
-      <Section icon={FileSpreadsheet} title="Solicitudes de cotización" bodyClassName="p-0" stats={[{ label: 'Ahorro por negociación', value: fmtSoles(ahorro) }]}>
+      <PageHeader title="Cotizaciones" actions={<LinkButton href="/cotizaciones/nueva"><Plus className="size-4" /> Nueva cotización</LinkButton>} />
+      <FilterBar>
+        <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
+        <FiltroFechas desde={desde} hasta={hasta} />
+      </FilterBar>
+      <Section icon={FileSpreadsheet} title="Solicitudes de cotización" bodyClassName="p-0"
+        stats={[{ label: 'Ahorro por negociación', value: <span title="Mejor oferta de la 1ª ronda − oferta adjudicada">{fmtSoles(ahorro)}</span> }]}>
         {rows.length ? (
           <PagedTable head={<tr><Th>N°</Th><Th>Fecha</Th><Th>Negocio</Th><Th>Título</Th><Th>Adjudicado a</Th><Th right>1ª ronda</Th><Th right>Adjudicado</Th><Th right>Ahorro</Th><Th>Estado</Th></tr>}>{rows.map((r) => (
               <tr key={r.id} className="hover:bg-canvas/60">
@@ -35,7 +46,7 @@ export default async function CotizacionesPage() {
                 <Td><EstadoBadge estado={r.estado} /></Td>
               </tr>
             ))}</PagedTable>
-        ) : <EmptyState title="Sin cotizaciones" action={<LinkButton href="/cotizaciones/nueva">Crear cotización</LinkButton>} />}
+        ) : <EmptyState title="Sin cotizaciones en el periodo" />}
       </Section>
     </>
   )

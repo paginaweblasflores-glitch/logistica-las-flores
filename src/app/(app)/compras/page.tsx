@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ShoppingCart, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getAmbito, getPanel, getAlmacenActivo } from '@/lib/session'
+import { getAmbito, getPanel } from '@/lib/session'
 import { getCiudades, getProveedores } from '@/lib/queries'
 import { fmtDate, fmtSoles, hoyLima } from '@/lib/format'
 import { sp } from '@/lib/utils'
@@ -11,7 +11,7 @@ import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, FiltroFecha
 import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 
-export const metadata = { title: 'Compras' }
+export const metadata = { title: 'Órdenes de compra' }
 
 const ESTADOS = [{ id: 'borrador', nombre: 'Borrador' }, { id: 'aprobada', nombre: 'Aprobada (por recibir)' }, { id: 'recibida', nombre: 'Recibida' }, { id: 'anulada', nombre: 'Anulada' }]
 
@@ -19,11 +19,9 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   // el almacén registra la llegada de las compras en Entradas (un solo paso)
   if ((await getPanel()) === 'almacen') redirect('/entradas/nueva?tipo=compra')
   const params = await searchParams
-  const [{ local }, panel, sel, supabase] = await Promise.all([getAmbito(), getPanel(), getAlmacenActivo(), createClient()])
-  const almacen = panel === 'almacen'
+  const [{ local }, supabase] = await Promise.all([getAmbito(), createClient()])
   const { from, to } = paginar(params)
-  // El almacén ve las órdenes aprobadas que debe recibir (y las ya recibidas)
-  const estado = sp(params, 'estado', almacen ? 'aprobada' : ''), proveedor = sp(params, 'proveedor'), ciudad = sp(params, 'ciudad')
+  const estado = sp(params, 'estado'), proveedor = sp(params, 'proveedor'), ciudad = sp(params, 'ciudad')
   const desde = sp(params, 'desde', `${hoyLima().slice(0, 4)}-01-01`), hasta = sp(params, 'hasta', hoyLima())
 
   let q = supabase.from('v_compra_resumen')
@@ -32,9 +30,6 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   if (local) q = q.eq('local_id', local.id)
   // los ingresos directos del almacén (sin orden) se ven en «Ingresos de almacén», no aquí
   q = q.eq('sin_orden', false)
-  // lo que es todo fuera de catálogo va directo al área: su llegada la registra Logística, no el almacén
-  if (almacen) q = q.eq('solo_fuera_catalogo', false)
-  if (sel.id) q = q.eq('almacen_id', sel.id)   // las compras que llegan al almacén elegido arriba
   if (estado) q = q.eq('estado', estado)
   if (proveedor) q = q.eq('proveedor_id', proveedor)
   if (ciudad) q = q.eq('ciudad_id', ciudad)
@@ -52,11 +47,8 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader title={almacen ? 'Recepción de compras' : 'Compras'}
-        description={almacen
-          ? 'Órdenes de compra aprobadas por Logística para su almacén. Abra una orden y confirme lo que llegó: el stock sube solo.'
-          : 'Registro de todas las compras por negocio y origen. Las crea y aprueba Logística; la recepción la confirma cada almacén.'}
-        actions={almacen ? undefined : <>
+      <PageHeader title="Órdenes de compra"
+        actions={<>
           <ExportButton filename="compras_detalle" table="v_compra_detalle" dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
             filters={{ local_id: local?.id }}
             columns={{ numero: 'N° compra', fecha: 'Fecha', estado: 'Estado', proveedor: 'Proveedor', ciudad: 'Origen', producto_codigo: 'Código', producto: 'Producto', categoria: 'Categoría', unidad: 'Unidad', cantidad_solicitada: 'Cant. pedida', cantidad_recibida: 'Cant. recibida', precio_unitario: 'Precio', precio_anterior: 'Precio anterior', variacion_pct: 'Variación %', importe: 'Importe' }} />
@@ -65,7 +57,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
       <FilterBar>
         <FilterField label="Proveedor" className="min-w-56"><Select name="proveedor" options={proveedores} defaultValue={proveedor} placeholder="Todos" /></FilterField>
         <FilterField label="Origen"><Select name="ciudad" options={ciudades} defaultValue={ciudad} placeholder="Todos" /></FilterField>
-        <FilterField label="Estado"><Select name="estado" options={almacen ? ESTADOS.filter((e) => e.id === 'aprobada' || e.id === 'recibida') : ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
+        <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
         <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
       <Section icon={ShoppingCart} title="Compras registradas" bodyClassName="p-0"
@@ -99,7 +91,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title={almacen ? 'No hay compras por recibir' : 'Sin compras en el periodo'} action={almacen ? undefined : <LinkButton href="/compras/nueva">Registrar compra</LinkButton>} />}
+        ) : <EmptyState title="Sin compras en el periodo" />}
       </Section>
     </>
   )

@@ -10,6 +10,8 @@ import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination,
 import { Select } from '@/components/select'
 import { ExportButton } from '@/components/export-button'
 import { ProductoFoto } from '@/components/producto-foto'
+import { TablaPorCategoria } from '@/components/tabla-por-categoria'
+import { agruparPorCategoria } from '@/lib/categorias'
 
 export const metadata = { title: 'Catálogo' }
 
@@ -52,10 +54,18 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
       if (estado !== 'todos') o = o.eq('p.activo', estado === 'activos')
       if (unidadFiltro) o = o.eq('p.und.codigo', unidadFiltro)
       if (almacen && almIds.length) o = o.in('p.st.almacen_id', almIds)
-      const r = await o.order('codigo', { ascending: false, nullsFirst: false }).order('producto_id').range(from, to)
-      if (r.error) throw r.error
-      const filas = (r.data ?? []) as unknown as { codigo: number | null; p: Record<string, unknown> }[]
-      return { data: filas.map((f) => ({ ...f.p, en_almacen: enAlmacen ? [{ codigo: f.codigo }] : undefined })), count: r.count }
+      // en el almacén se trae TODO su catálogo (sin páginas) para mostrarlo agrupado por categoría, en orden de código
+      const filas: { codigo: number | null; p: Record<string, unknown> }[] = []
+      let total: number | null = null
+      for (let desde = almacen ? 0 : from; ; desde += 1000) {
+        const hasta = almacen ? desde + 999 : to
+        const r = await o.order('codigo', { ascending: almacen, nullsFirst: false }).order('producto_id').range(desde, hasta)
+        if (r.error) throw r.error
+        filas.push(...((r.data ?? []) as unknown as { codigo: number | null; p: Record<string, unknown> }[]))
+        total = r.count
+        if (!almacen || (r.data ?? []).length < 1000) break
+      }
+      return { data: filas.map((f) => ({ ...f.p, en_almacen: enAlmacen ? [{ codigo: f.codigo }] : undefined })), count: total }
     }
     // sin negocio elegido (o productos sin negocio): directo sobre el catálogo
     let query = supabase.from('producto').select(CAMPOS, { count: 'exact' })
@@ -110,6 +120,27 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
     { label: sinNegocio ? 'Sin negocio' : local ? `Lista de ${local.codigo === 'LF' ? 'Las Flores' : 'Umaru'}` : 'Mostrados', value: count ?? 0 },
   ]
 
+  // una fila de la tabla (la misma en la vista agrupada del almacén y en la de páginas)
+  const fila = (p: P) => (
+                <tr key={p.id} className={p.activo ? 'hover:bg-canvas/60' : 'opacity-50'}>
+                  {/* en un almacén: SU código; con «Todos»: el de la maestra del negocio */}
+                  {almacen && <Td right className="font-mono text-xs font-semibold tabular">{(enAlmacen ? p.en_almacen?.[0]?.codigo : p.negocios[0]?.codigo) ?? '—'}</Td>}
+                  <Td><Link href={`/productos/${p.id}`} className="flex items-center gap-3 hover:text-brand-600"><ProductoFoto src={p.imagen_url} alt={p.nombre} />
+                    <span className="min-w-0"><span className="block font-medium">{p.nombre}</span>
+                      <span className="text-xs text-muted">{almacen ? p.marca : <>{p.codigo}{p.marca ? ` · ${p.marca}` : ''}</>}</span></span></Link></Td>
+                  {!almacen && <Td>{p.negocios.length
+                    ? <span className="flex flex-col gap-0.5">{p.negocios.map((n) => <span key={n.local.codigo} className="flex items-center gap-1.5"><LocalBadge codigo={n.local.codigo} /><span className="text-xs text-muted tabular">#{n.codigo}</span></span>)}</span>
+                    : <Badge tone="amber">Sin asignar</Badge>}</Td>}
+                  {/* agrupado por categoría, la columna repetiría el título del grupo */}
+                  {!almacen && <Td className="text-xs">{p.categoria?.nombre ?? '—'}</Td>}
+                  <Td>{p.unidad.codigo}</Td>
+                  {almacen && <Td>{stockInicialListo(p.id)
+                    ? <Badge tone="green">Listo</Badge>
+                    : <span title="Se pone una sola vez, en la ficha del producto"><Badge tone="amber">Pendiente</Badge></span>}</Td>}
+                  <Td right>{fmtSoles(p.costo_referencia)}</Td>
+                </tr>
+  )
+
   return (
     <>
       <PageHeader title={almacen ? (sel.actual && sel.lista.length > 1 ? `Catálogo · ${sel.actual.corto}` : 'Catálogo de mi almacén') : 'Catálogo'}
@@ -134,31 +165,22 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
       <Section icon={Package} title={sinNegocio ? 'Productos sin negocio asignado' : 'Productos'} bodyClassName="p-0" stats={stats}
         actions={sinNegocio ? <Link href="/productos" className="text-xs enlace">Ver todos</Link> : undefined}>
         {data?.length ? (
+          almacen ? (
+            // el almacén ve su catálogo organizado por categoría (cada una se abre y se cierra)
+            <TablaPorCategoria columnas={5} head={<tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}{!almacen && <Th>Categoría</Th>}<Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr>}
+              grupos={agruparPorCategoria(data as unknown as P[], (p) => p.categoria?.nombre).map(([cat, ps]) => ({
+                categoria: cat, cantidad: ps.length, filas: ps.map((p) => fila(p)),
+              }))} />
+          ) : (
           <>
             <Table>
-              <thead><tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}<Th>Categoría</Th><Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr></thead>
-              <tbody>{(data as unknown as P[]).map((p) => (
-                <tr key={p.id} className={p.activo ? 'hover:bg-canvas/60' : 'opacity-50'}>
-                  {/* en un almacén: SU código; con «Todos»: el de la maestra del negocio */}
-                  {almacen && <Td right className="font-mono text-xs font-semibold tabular">{(enAlmacen ? p.en_almacen?.[0]?.codigo : p.negocios[0]?.codigo) ?? '—'}</Td>}
-                  <Td><Link href={`/productos/${p.id}`} className="flex items-center gap-3 hover:text-brand-600"><ProductoFoto src={p.imagen_url} alt={p.nombre} />
-                    <span className="min-w-0"><span className="block font-medium">{p.nombre}</span>
-                      <span className="text-xs text-muted">{almacen ? p.marca : <>{p.codigo}{p.marca ? ` · ${p.marca}` : ''}</>}</span></span></Link></Td>
-                  {!almacen && <Td>{p.negocios.length
-                    ? <span className="flex flex-col gap-0.5">{p.negocios.map((n) => <span key={n.local.codigo} className="flex items-center gap-1.5"><LocalBadge codigo={n.local.codigo} /><span className="text-xs text-muted tabular">#{n.codigo}</span></span>)}</span>
-                    : <Badge tone="amber">Sin asignar</Badge>}</Td>}
-                  <Td className="text-xs">{p.categoria?.nombre ?? '—'}</Td>
-                  <Td>{p.unidad.codigo}</Td>
-                  {almacen && <Td>{stockInicialListo(p.id)
-                    ? <Badge tone="green">Listo</Badge>
-                    : <span title="Se pone una sola vez, en la ficha del producto"><Badge tone="amber">Pendiente</Badge></span>}</Td>}
-                  <Td right>{fmtSoles(p.costo_referencia)}</Td>
-                </tr>
-              ))}</tbody>
+              <thead><tr>{almacen && <Th right>Cód.</Th>}<Th>Producto</Th>{!almacen && <Th>Se usa en</Th>}{!almacen && <Th>Categoría</Th>}<Th>Unidad</Th>{almacen && <Th>Stock inicial</Th>}<Th right>Último precio</Th></tr></thead>
+              <tbody>{(data as unknown as P[]).map((p) => fila(p))}</tbody>
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title="Sin productos" action={almacen && !consulta ? <LinkButton href="/productos/nuevo">Registrar producto</LinkButton> : undefined} />}
+          )
+        ) : <EmptyState title="Sin productos" />}
       </Section>
     </>
   )

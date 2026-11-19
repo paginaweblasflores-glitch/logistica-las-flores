@@ -8,6 +8,8 @@ import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, FilterBar, FilterField, Pagination, EmptyState, LocalBadge, Note, LinkButton } from '@/components/ui'
 import { ProductoFoto } from '@/components/producto-foto'
+import { TablaPorCategoria } from '@/components/tabla-por-categoria'
+import { agruparPorCategoria } from '@/lib/categorias'
 import { Select } from '@/components/select'
 
 export const metadata = { title: 'Stock actual' }
@@ -36,8 +38,22 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   if (categoria) query = query.eq('categoria', categoria)
   if (q) query = query.or(`nombre.ilike.%${q.replace(/[,()]/g, ' ')}%,codigo.ilike.%${q.replace(/[,()]/g, ' ')}%`)
   // la lista, los totales (agregados en la base, sin descargar filas) y los almacenes: al mismo tiempo
+  const agrupar = panel === 'almacen'
+  const leer = async () => {
+    if (!agrupar) return query.order('nombre').range(from, to)
+    const filas: unknown[] = []
+    let total: number | null = null
+    for (let desde = 0; ; desde += 1000) {
+      const r = await query.order('codigo_almacen', { nullsFirst: false }).order('nombre').range(desde, desde + 999)
+      if (r.error) throw r.error
+      filas.push(...(r.data ?? []))
+      total = r.count
+      if ((r.data ?? []).length < 1000) break
+    }
+    return { data: filas, count: total }
+  }
   const [{ data, count }, { data: tot }, almacenes, categorias] = await Promise.all([
-    query.order('nombre').range(from, to),
+    leer(),
     supabase.rpc('fn_stock_totales', { p_local: local?.id ?? null, p_almacen: almacen || null, p_tipo: null }),
     getAlmacenes(local?.id),
     getCategorias(),
@@ -49,33 +65,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     almacen_nombre: string; cantidad: number; costo_promedio: number; valor: number; stock_minimo: number | null; stock_maximo: number | null
     stock_objetivo: number | null; estado: string; ultimo_movimiento: string | null }
 
-  return (
-    <>
-      {/* entradas y salidas se registran en sus propios módulos */}
-      <PageHeader title={`Stock actual${sel.actual ? ` · ${sel.actual.corto}` : ''}`} />
-
-      {alerta && !estado && (
-        <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto (haga clic en su nombre). <Link href="/inventario" className="enlace">Ver todo el stock</Link></Note></div>
-      )}
-      <FilterBar>
-        {alerta && <input type="hidden" name="alerta" value="1" />}
-        <FilterField label="Buscar" className="min-w-60"><input name="q" defaultValue={q} placeholder="Nombre o código" className="field" /></FilterField>
-        {!sel.lista.length && <FilterField label="Almacén"><Select name="almacen" options={almacenes} defaultValue={almacen} placeholder="Todos" /></FilterField>}
-        <FilterField label="Categoría" className="min-w-56"><Select name="categoria" options={categorias.map((c) => ({ id: c.nombre, nombre: c.nombre }))} defaultValue={categoria} placeholder="Todas" /></FilterField>
-        <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
-      </FilterBar>
-      {conCosto && <p className="-mt-2 mb-3 text-xs text-muted">Costo unit. promedio = promedio de lo que costó cada unidad en todas las compras · Valor total = cantidad × costo promedio. Los precios reales de cada boleta están en <Link href="/precios" className="enlace">Trazabilidad de precios</Link>.</p>}
-
-      <Section icon={Boxes} title="Existencias" bodyClassName="p-0"
-        stats={[...(conCosto ? [{ label: 'Valor total', value: fmtSoles(valor) }] : []), { label: 'Registros', value: count ?? 0 }, { label: 'Críticos', value: criticos }]}>
-        {data?.length ? (
-          <>
-            <Table>
-              <thead><tr>
-                <Th>Producto</Th><Th>Almacén</Th><Th right>Stock</Th><Th right>Mín.</Th>{conCosto && <><Th right>Costo unit. promedio</Th><Th right>Valor total</Th></>}<Th>Estado</Th><Th>Últ. mov.</Th><Th />
-              </tr></thead>
-              <tbody>
-                {(data as Row[]).map((r) => (
+  // una fila de la tabla (la misma agrupada por categoría y con páginas)
+  const fila = (r: Row) => (
                   <tr key={r.producto_id + r.almacen_id} className="hover:bg-canvas/60">
                     <Td>
                       {/* el nombre abre la ficha del Catálogo: ahí se corrige el nombre, la unidad o el mínimo */}
@@ -104,11 +95,51 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       </Link>
                     </Td>
                   </tr>
-                ))}
+  )
+
+  return (
+    <>
+      {/* entradas y salidas se registran en sus propios módulos */}
+      <PageHeader title={`Stock actual${sel.actual ? ` · ${sel.actual.corto}` : ''}`} />
+
+      {alerta && !estado && (
+        <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto (haga clic en su nombre). <Link href="/inventario" className="enlace">Ver todo el stock</Link></Note></div>
+      )}
+      <FilterBar>
+        {alerta && <input type="hidden" name="alerta" value="1" />}
+        <FilterField label="Buscar" className="min-w-60"><input name="q" defaultValue={q} placeholder="Nombre o código" className="field" /></FilterField>
+        {!sel.lista.length && <FilterField label="Almacén"><Select name="almacen" options={almacenes} defaultValue={almacen} placeholder="Todos" /></FilterField>}
+        <FilterField label="Categoría" className="min-w-56"><Select name="categoria" options={categorias.map((c) => ({ id: c.nombre, nombre: c.nombre }))} defaultValue={categoria} placeholder="Todas" /></FilterField>
+        <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
+      </FilterBar>
+      {conCosto && <p className="-mt-2 mb-3 text-xs text-muted">Costo unit. promedio = promedio de lo que costó cada unidad en todas las compras · Valor total = cantidad × costo promedio. Los precios reales de cada boleta están en <Link href="/precios" className="enlace">Trazabilidad de precios</Link>.</p>}
+
+      <Section icon={Boxes} title="Existencias" bodyClassName="p-0"
+        stats={[...(conCosto ? [{ label: 'Valor total', value: fmtSoles(valor) }] : []), { label: 'Registros', value: count ?? 0 }, { label: 'Críticos', value: criticos }]}>
+        {data?.length ? (
+          agrupar ? (
+            // el almacén ve su stock organizado por categoría (cada una se abre y se cierra)
+            <TablaPorCategoria columnas={conCosto ? 9 : 7} head={<tr>
+                <Th>Producto</Th><Th>Almacén</Th><Th right>Stock</Th><Th right>Mín.</Th>{conCosto && <><Th right>Costo unit. promedio</Th><Th right>Valor total</Th></>}<Th>Estado</Th><Th>Últ. mov.</Th><Th />
+              </tr>}
+              grupos={agruparPorCategoria(data as Row[], (r) => r.categoria).map(([cat, rs]) => {
+                const reponer = rs.filter((r) => r.estado === 'critico' || r.estado === 'agotado').length
+                return { categoria: cat, cantidad: rs.length, filas: rs.map((r) => fila(r)),
+                  detalle: reponer ? <span className="text-amber-700">· {reponer} por reponer</span> : undefined }
+              })} />
+          ) : (
+          <>
+            <Table>
+              <thead><tr>
+                <Th>Producto</Th><Th>Almacén</Th><Th right>Stock</Th><Th right>Mín.</Th>{conCosto && <><Th right>Costo unit. promedio</Th><Th right>Valor total</Th></>}<Th>Estado</Th><Th>Últ. mov.</Th><Th />
+              </tr></thead>
+              <tbody>
+                {(data as Row[]).map((r) => fila(r))}
               </tbody>
             </Table>
             <Pagination total={count ?? 0} />
           </>
+          )
         ) : q || estado || categoria || alerta
           ? <EmptyState title="Sin resultados" description="Ajuste los filtros." />
           : <EmptyState title="Aún no hay stock" description="Registre el stock inicial de cada producto en el Catálogo."

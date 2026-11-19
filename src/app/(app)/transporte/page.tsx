@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Route } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { ExportButton } from '@/components/export-button'
 import { getAmbito } from '@/lib/session'
 import { fmtDate, fmtPct, fmtSoles, hoyLima, MESES_CORTO } from '@/lib/format'
 import { sp } from '@/lib/utils'
@@ -46,7 +47,12 @@ export default async function TransportePage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <PageHeader title="Transporte" description="Reporte del costo de los fletes: por mes, por transportista y cuánto representan sobre lo comprado. Se suma al costo real de cada compra." />
+      <PageHeader title="Transporte" actions={
+        <ExportButton filename={`fletes_${desde}_${hasta}`} table="v_transporte" dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
+          filters={{ local_id: local?.id }}
+          columns={{ fecha: 'Fecha', negocio: 'Negocio', compra: 'Compra', transportista: 'Transportista', origen: 'Desde', destino: 'Hasta',
+            documento: 'Guía / boleta', peso_kg: 'Peso (kg)', bultos: 'Bultos', costo: 'Costo' }} />
+      } />
       <FilterBar>
         <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
@@ -56,11 +62,12 @@ export default async function TransportePage({ searchParams }: { searchParams: P
         <Stat label="Compras con flete" value={conFlete} hint={nCompras ? `${fmtPct(conFlete / nCompras)} de ${nCompras} compras` : undefined} />
         <Stat label="Flete promedio por compra" value={fmtSoles(conFlete ? total / conFlete : null)} hint="Sumando todos sus tramos" />
       </div>
-      <div className="mb-5 grid gap-5 lg:grid-cols-2">
+      {/* los gráficos, solo si hay fletes en el periodo (vacíos ocupaban media pantalla sin decir nada) */}
+      {rows.length > 0 && <div className="mb-5 grid gap-5 lg:grid-cols-2">
         <Section title="Costo por mes"><Bars data={serieMes} x="mes" series={[{ key: 'costo', name: 'Transporte' }]} height={220} /></Section>
         <Section title="Costo por transportista"><Bars data={serieTr} x="transportista" horizontal series={[{ key: 'costo', name: 'Transporte', color: '#1F2228' }]} height={220} /></Section>
-      </div>
-      <Section icon={Route} title="Fletes registrados" bodyClassName="p-0" stats={[{ label: 'Total', value: fmtSoles(total) }]}>
+      </div>}
+      <Section icon={Route} title="Fletes registrados" bodyClassName="p-0">
         {rows.length ? (
           <PagedTable head={<tr><Th>Fecha</Th><Th>Negocio</Th><Th>Compra</Th><Th>Transportista</Th><Th>Desde → hasta</Th><Th>Guía / boleta</Th><Th right>Costo</Th></tr>}>{rows.map((r) => (
               <tr key={r.id}><Td className="tabular">{fmtDate(r.fecha)}</Td><Td><LocalBadge codigo={r.local?.codigo} /></Td>

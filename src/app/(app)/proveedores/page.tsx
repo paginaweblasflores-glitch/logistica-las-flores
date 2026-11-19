@@ -1,13 +1,12 @@
 import Link from 'next/link'
-import { Building2, Plus, UserPlus } from 'lucide-react'
+import { Building2, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getCiudades } from '@/lib/queries'
-import { fmtDate, hoyLima, MESES_CORTO } from '@/lib/format'
+import { fmtDate } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, Badge } from '@/components/ui'
 import { Select } from '@/components/select'
-import { Bars } from '@/components/charts'
 import { ExportButton } from '@/components/export-button'
 import { TIPOS_PROVEEDOR, etiquetaTipo } from '@/lib/proveedor-tipo'
 
@@ -15,11 +14,10 @@ export const metadata = { title: 'Proveedores' }
 
 export default async function ProveedoresPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
-  const supabase = await createClient()
-  const ciudades = await getCiudades()
+  // la lista de ciudades (filtro) y el cliente al mismo tiempo
+  const [supabase, ciudades] = await Promise.all([createClient(), getCiudades()])
   const { from, to } = paginar(params)
   const q = sp(params, 'q'), ciudad = sp(params, 'ciudad'), estado = sp(params, 'estado', 'activos'), tipo = sp(params, 'tipo')
-  const anio = Number(hoyLima().slice(0, 4))
 
   let query = supabase.from('proveedor')
     .select('id, ruc, razon_social, subcategoria, contacto, telefono, forma_pedido, dias_pedido, es_transportista, activo, fecha_registro, tipo, ciudad:ciudad_id(nombre)', { count: 'exact' })
@@ -29,30 +27,21 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
   if (estado === 'activos') query = query.eq('activo', true)
   if (estado === 'inactivos') query = query.eq('activo', false)
   if (estado === 'transportistas') query = query.eq('es_transportista', true)
-  const [{ data, count }, { data: mensual }] = await Promise.all([
-    query.order('razon_social').range(from, to),
-    supabase.rpc('fn_proveedores_mensual', { p_anio: anio }),
-  ])
-  const serie = ((mensual ?? []) as { mes: number; nuevos: number; acumulado: number }[])
-    .filter((m) => m.mes <= Number(hoyLima().slice(5, 7))).map((m) => ({ mes: MESES_CORTO[m.mes - 1], nuevos: Number(m.nuevos), acumulado: Number(m.acumulado) }))
-  const totalAnio = serie.at(-1)?.acumulado ?? 0
+  // los proveedores nuevos de cada mes están en Reportes
+  const { data, count } = await query.order('razon_social').range(from, to)
 
   type Row = { id: string; ruc: string | null; razon_social: string; subcategoria: string | null; contacto: string | null; telefono: string | null
     forma_pedido: string | null; dias_pedido: string | null; es_transportista: boolean; activo: boolean; fecha_registro: string; tipo: string; ciudad: { nombre: string } | null }
 
   return (
     <>
-      <PageHeader title="Proveedores" description="Base de datos única de proveedores con historial de compras y precios."
+      <PageHeader title="Proveedores"
         actions={<>
           <ExportButton filename="proveedores" table="proveedor" order="razon_social"
             columns={{ ruc: 'RUC', razon_social: 'Razón social', subcategoria: 'Rubro', contacto: 'Contacto', telefono: 'Teléfono', email: 'Correo', forma_pedido: 'Forma de pedido', dias_pedido: 'Días de pedido', condiciones_pago: 'Condiciones de pago', fecha_registro: 'Fecha de registro', activo: 'Activo' }} />
           <LinkButton href="/proveedores/nuevo"><Plus className="size-4" /> Nuevo proveedor</LinkButton>
         </>} />
 
-      <Section icon={UserPlus} title={`Nuevos proveedores ${anio}`} className="mb-5" stats={[{ label: 'Nuevos en el año', value: totalAnio }]}>
-        <p className="mb-3 text-xs text-muted">Proveedores con los que se compró por primera vez en cada mes. Estar registrado en la lista no cuenta como proveedor nuevo.</p>
-        <Bars data={serie} x="mes" format="num" height={200} series={[{ key: 'nuevos', name: 'Primera compra en el mes' }, { key: 'acumulado', name: 'Acumulado' }]} />
-      </Section>
 
       <FilterBar>
         <FilterField label="Buscar" className="min-w-64"><input name="q" defaultValue={q} placeholder="Nombre, rubro o RUC" className="field" /></FilterField>
@@ -83,7 +72,7 @@ export default async function ProveedoresPage({ searchParams }: { searchParams: 
             </Table>
             <Pagination total={count ?? 0} />
           </>
-        ) : <EmptyState title="Sin proveedores" action={<LinkButton href="/proveedores/nuevo">Registrar proveedor</LinkButton>} />}
+        ) : <EmptyState title="Sin proveedores" />}
       </Section>
     </>
   )

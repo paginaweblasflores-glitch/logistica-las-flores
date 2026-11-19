@@ -90,14 +90,13 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Nueva compra" back={{ href: '/compras', label: 'Compras' }}
-        description={cot ? <>Generada desde la cotización <b>{cot.numero}</b>{req ? <> del requerimiento <b>{req.numero}</b></> : null}{cot.canal ? <> · se compra <b>{etiquetaCanal(cot.canal)?.toLowerCase()}</b></> : null}{cot.partes > 1 ? <> · es 1 de las {cot.partes} compras de esta cotización (solo los productos que ganó este proveedor)</> : null}.</> : req ? <>Generada desde el requerimiento <b>{req.numero}</b>.</> : 'Registre proveedor, origen, documento y productos. El precio anterior y la variación se calculan solos.'} />
+      <PageHeader title="Nueva compra" back={{ href: '/compras', label: 'Órdenes de compra' }}
+        description={cot ? <>Generada desde la cotización <b>{cot.numero}</b>{req ? <> del requerimiento <b>{req.numero}</b></> : null}{cot.canal ? <> · se compra <b>{etiquetaCanal(cot.canal)?.toLowerCase()}</b></> : null}{cot.partes > 1 ? <> · es 1 de las {cot.partes} compras de esta cotización (solo los productos que ganó este proveedor)</> : null}.</> : req ? <>Generada desde el requerimiento <b>{req.numero}</b>.</> : undefined} />
       <ActionForm action={crearCompra} className="space-y-5">
         {req && <input type="hidden" name="requerimiento_id" value={req.id} />}
         {cot && <><input type="hidden" name="cotizacion_id" value={cot.id} /><input type="hidden" name="oferta_id" value={cot.oferta} /></>}
-        <Section title="Productos y datos de la compra">
-          {/* orden estándar: productos → datos → observación */}
-          <div className="mb-6"><CompraLineas inicial={inicial} /></div>
+        {/* mismo orden que los demás formularios: primero a quién y cómo se compra, luego los productos */}
+        <Section title="Datos de la compra">
           <div className="grid gap-4 md:grid-cols-4">
             <div className="md:col-span-2"><span className="label">Proveedor o tienda</span><ProveedorPicker name="proveedor" proveedores={proveedores} defaultValue={cot?.proveedor} /></div>
             <label><span className="label">Almacén destino <span className="req">*</span></span><Select name="almacen" options={almacenesOpc} defaultValue={principal?.id} required /></label>
@@ -112,7 +111,10 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
             </label>
             <label><span className="label">Entrega comprometida</span><input type="datetime-local" name="fecha_compromiso" className="field" /></label>
           </div>
-          <label className="mt-4 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
+        </Section>
+        <Section title="Productos">
+          <CompraLineas inicial={inicial} />
+          <label className="mt-6 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span><input name="observacion" className="field" /></label>
         </Section>
         <div className="flex flex-wrap justify-end gap-2">
           <SubmitButton name="accion" value="borrador" variant="outline">Guardar borrador</SubmitButton>
@@ -127,7 +129,7 @@ export default async function NuevaCompraPage({ searchParams }: { searchParams: 
 function Bloqueado({ texto, href }: { texto: string; href: string }) {
   return (
     <>
-      <PageHeader title="Nueva compra" back={{ href: '/compras', label: 'Compras' }} />
+      <PageHeader title="Nueva compra" back={{ href: '/compras', label: 'Órdenes de compra' }} />
       <div className="card flex flex-col items-start gap-3 p-6">
         <p className="text-sm">{texto}</p>
         <a href={href} className="text-sm enlace">Ver documento →</a>
