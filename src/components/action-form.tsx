@@ -1,8 +1,14 @@
 'use client'
 
-import { useActionState, useEffect, useRef } from 'react'
+import { createContext, Fragment, useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ActionResult } from '@/lib/actions'
+
+/**
+ * «Cancelar» de un formulario de edición: vuelve a lo guardado. Se hace volviendo a montar los campos, así también
+ * se restauran los selectores y listas con su propio estado (no solo los <input> que restaura un reset del navegador).
+ */
+export const CancelarFormulario = createContext<(() => void) | null>(null)
 
 /**
  * Formulario conectado a una Server Action que devuelve {ok,message,error}.
@@ -18,6 +24,8 @@ export function ActionForm({ action, children, className, resetOnSuccess, id, on
 }) {
   const [state, formAction] = useActionState<ActionResult, FormData>(action, undefined)
   const ref = useRef<HTMLFormElement>(null)
+  // cada «Cancelar» monta los campos de nuevo con sus valores guardados
+  const [version, setVersion] = useState(0)
   useEffect(() => {
     if (!state) return
     // los botones «solo con cambios» leen el resultado: si falló, lo escrito sigue sin guardar
@@ -30,5 +38,9 @@ export function ActionForm({ action, children, className, resetOnSuccess, id, on
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
-  return <form ref={ref} id={id} action={formAction} className={className}>{children}</form>
+  return (
+    <CancelarFormulario.Provider value={() => setVersion((v) => v + 1)}>
+      <form ref={ref} id={id} action={formAction} className={className}><Fragment key={version}>{children}</Fragment></form>
+    </CancelarFormulario.Provider>
+  )
 }

@@ -14,18 +14,24 @@ import { COMPROBANTES } from '@/lib/documentos'
 import { CampoGuia } from '@/components/campo-guia'
 import { ProveedorPicker, type ProveedorOpc } from '@/components/proveedor-picker'
 import { TotalComprobante } from '@/components/total-comprobante'
+import { PrecioCelda, ImporteCelda, importeDe, repartirPrecio } from '@/components/precio-linea'
 
 export type LineaPedida = { detalle_id: string; producto_id: string; codigo: string; nombre: string; unidad: string; pedido: number; controla_lote: boolean
   /** último precio de compra: viene sugerido; solo se cambia si la boleta trae otro */
   ultimo?: number | null
   /** unidad del producto y, si es empaque, cuánto trae (para escribir lo que llegó en otra unidad) */
   unidad_id?: string | null; contenido?: number | null; contenido_unidad_id?: string | null
+  /** presentación grande (Saco, Caja…) y cuánto trae: se escribe en ella o en la unidad del producto */
+  presentacion_id?: string | null; presentacion_cantidad?: number | null
   /** se pidió en otra unidad (3 Saco): la llegada viene en esa unidad; factor = unidades del producto por cada una */
   enPedido?: { cantidad: number; unidad_id: string; nombre: string; factor: number } | null
   /** precio adjudicado en la cotización (por unidad del producto): viene sugerido antes que el último de compra */
   cotizado?: number | null }
 type Fila = { detalle_id: string | null; producto_id: string; codigo: string; nombre: string; unidad: string; pedido: number | null; controla_lote: boolean
   unidad_id?: string | null; contenido?: number | null; contenido_unidad_id?: string | null
+  presentacion_id?: string | null; presentacion_cantidad?: number | null
+  /** lo que se está tecleando en «importe» o en «por kg» (se recalcula al cambiar otra cosa) */
+  _importe?: string | null; _chica?: string | null
   cant: string; precio: string; vence: string; uni: string; equivale: string; enPedido?: LineaPedida['enPedido'] }
 const num = (v: string) => Number(String(v).replace(',', '.'))
 
@@ -49,14 +55,20 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
   const u = useUnidades()
   // cuántas unidades del producto es 1 de la unidad en que se escribió (1 si es la misma)
   const fac = (f: Fila) => factorUnidad(u, f, f.uni, f.equivale) ?? 1
-  const set = (i: number, k: 'cant' | 'precio' | 'vence' | 'uni' | 'equivale', v: string) => setFilas((fs) => fs.map((f, j) => (j === i ? { ...f, [k]: v } : f)))
+  const set = (i: number, k: 'cant' | 'precio' | 'vence' | 'uni' | 'equivale', v: string) => setFilas((fs) => fs.map((f, j) => (j === i ? { ...f, [k]: v, _importe: null, _chica: null } : f)))
+  // precio que sale del importe de la factura o del precio por unidad chica (se guarda lo tecleado mientras se escribe)
+  const setPrecio = (i: number, precio: string | null, campo: '_importe' | '_chica', escrito: string) =>
+    setFilas((fs) => fs.map((f, j) => (j === i ? { ...f, ...(precio !== null ? { precio } : {}), _importe: null, _chica: null, [campo]: escrito } : f)))
+  // «Repartir el descuento» del total del comprobante entre los productos, según su importe
+  const repartir = (factor: number) => setFilas((fs) => fs.map((f) => ({ ...f, precio: repartirPrecio(f.precio, factor), _importe: null, _chica: null })))
   function agregar(p: ProductoLite) {
     if (filas.some((f) => f.producto_id === p.id)) return
     setFilas((fs) => [...fs, { detalle_id: null, producto_id: p.id, codigo: p.codigo, nombre: p.nombre, unidad: p.unidad, pedido: null,
       controla_lote: !!p.controla_lote, unidad_id: p.unidad_id, contenido: p.contenido, contenido_unidad_id: p.contenido_unidad_id,
+      presentacion_id: p.presentacion_id, presentacion_cantidad: p.presentacion_cantidad,
       cant: '', precio: p.costo_referencia > 0 ? String(p.costo_referencia) : '', vence: '', uni: '', equivale: '' }])
   }
-  const suma = filas.reduce((s, f) => s + (num(f.cant) || 0) * (num(f.precio) || 0), 0)
+  const suma = filas.reduce((s, f) => s + importeDe(f.cant, f.precio), 0)
   const hayVence = filas.some((f) => f.controla_lote)
   const noCuadra = totalDoc !== '' && Math.abs(num(totalDoc) - suma) > 0.05
   // lo pedido está en la unidad del producto: se compara lo que llegó ya convertido
@@ -93,12 +105,13 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
                   <td className="td py-1"><UnidadCelda u={u} p={f} value={f.uni} equivale={f.equivale} cantidad={f.cant}
                     onUnidad={(v) => set(i, 'uni', v)} onEquivale={(v) => set(i, 'equivale', v)} etiqueta={`Unidad de ${f.nombre}`}
                     fijo={f.enPedido && f.uni === f.enPedido.unidad_id ? f.enPedido.factor : undefined} /></td>
-                  <td className="td py-1"><input inputMode="decimal" value={f.precio} required={num(f.cant) > 0} onFocus={(e) => e.target.select()} onChange={(e) => set(i, 'precio', e.target.value)}
-                    aria-label={`Precio unitario de ${f.nombre}`} placeholder="0.00" className="field h-8 text-right tabular" /></td>
+                  <td className="td py-1"><PrecioCelda precio={f.precio} factor={fac(f)} unidad={f.unidad} requerido={num(f.cant) > 0} chicaEscrita={f._chica}
+                    onPrecio={(v) => set(i, 'precio', v)} onChica={(p, escrito) => setPrecio(i, p, '_chica', escrito)} etiqueta={`Precio unitario de ${f.nombre}`} /></td>
                   {hayVence && <td className="td py-1">{f.controla_lote
                     ? <input type="date" value={f.vence} onChange={(e) => set(i, 'vence', e.target.value)} aria-label={`Vencimiento de ${f.nombre}`} className="field h-8 tabular" />
                     : <span className="block px-1 text-xs text-subtle">—</span>}</td>}
-                  <td className="td text-right font-semibold tabular">{fmtSoles((num(f.cant) || 0) * (num(f.precio) || 0))}</td>
+                  <td className="td w-32 py-1"><ImporteCelda cantidad={f.cant} precio={f.precio} escrito={f._importe}
+                    onImporte={(p, escrito) => setPrecio(i, p, '_importe', escrito)} etiqueta={`Importe de ${f.nombre}`} /></td>
                   <td className="td py-1">{f.pedido === null && (
                     <button type="button" onClick={() => setFilas((fs) => fs.filter((_, j) => j !== i))} aria-label="Quitar" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-brand-50 hover:text-brand-600"><Trash2 className="size-4" /></button>
                   )}</td>
@@ -118,7 +131,7 @@ export function LlegadaCompra({ compraId, lineas, almacenId, proveedores, provee
         <label><span className="label">Comprobante</span>
           <Select name="tipo_documento" options={COMPROBANTES} defaultValue="boleta" required /></label>
         <label><span className="label">N° del comprobante</span><input name="numero_documento" className="field" placeholder="B001-000123" /></label>
-        <TotalComprobante suma={suma} onEscrito={setTotalDoc} />
+        <TotalComprobante suma={suma} onEscrito={setTotalDoc} onRepartir={repartir} />
         <label><span className="label">Fecha y hora de llegada</span>
           <input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
         <CampoGuia />

@@ -1,16 +1,18 @@
 'use client'
 
-import { useEffect, useEffectEvent, useId, useRef, useState } from 'react'
+import { Fragment, useContext, useEffect, useEffectEvent, useId, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { AlertTriangle, HelpCircle, LoaderCircle } from 'lucide-react'
 import { btnClass, type BtnVariant } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { CancelarFormulario } from '@/components/action-form'
 
 /**
  * Botón de envío de formularios. Con `confirm`, antes de enviar muestra un modal propio del sistema
  * (centrado, con fondo oscuro, Esc para cancelar) en lugar del aviso del navegador.
  * Con `soloConCambios` (formularios de edición) queda apagado hasta que algo cambie en el formulario;
  * con `listo`, hasta que el formulario cumpla esa condición (p. ej. una cantidad mayor a 0).
+ * Con `soloConCambios`, cuando hay algo escrito sin guardar aparece al lado «Cancelar», que vuelve a lo guardado.
  */
 export function SubmitButton({ children, variant = 'primary', size = 'md', className, confirm, name, value, soloConCambios, listo }: {
   children: React.ReactNode; variant?: BtnVariant; size?: 'sm' | 'md'; className?: string
@@ -23,6 +25,9 @@ export function SubmitButton({ children, variant = 'primary', size = 'md', class
   const apagado = useHabilitado(boton, pending, !!soloConCambios, listo) === false
   const dialogo = useRef<HTMLDialogElement>(null)
   const peligro = variant === 'danger'
+  // formulario de edición con cambios sin guardar: se pueden descartar
+  const cancelar = useContext(CancelarFormulario)
+  const conCambios = !!soloConCambios && !apagado && !pending && !!cancelar
   const titulo = useId()
 
   function aceptar() {
@@ -32,8 +37,14 @@ export function SubmitButton({ children, variant = 'primary', size = 'md', class
     b?.form?.requestSubmit(b)
   }
 
+  // con «solo con cambios», el botón va junto a su «Cancelar» (siempre en el mismo contenedor: no se recrea al aparecer)
+  const Junto = soloConCambios ? 'span' : Fragment
   return (
     <>
+      <Junto {...(soloConCambios ? { className: 'inline-flex flex-wrap items-center justify-end gap-2' } : {})}>
+      {conCambios && (
+        <button type="button" onClick={cancelar!} className={btnClass('ghost', size)} title="Descartar lo que cambió y volver a lo guardado">Cancelar</button>
+      )}
       <button
         ref={boton}
         type="submit"
@@ -52,6 +63,7 @@ export function SubmitButton({ children, variant = 'primary', size = 'md', class
         {pending && <LoaderCircle className="size-4 animate-spin" />}
         {children}
       </button>
+      </Junto>
 
       {confirm && (
         <dialog
@@ -97,15 +109,17 @@ function useHabilitado(boton: React.RefObject<HTMLButtonElement | null>, pending
   useEffect(() => {
     const form = boton.current?.form
     if (!usar || !form) return
-    guardado.current = foto(form)
+    guardado.current = null
     let t: ReturnType<typeof setTimeout>
     const revisar = () => {
       clearTimeout(t)
       // tras el render: los campos ocultos controlados por React ya tienen su valor nuevo
       t = setTimeout(() => {
         const actual = foto(form)
+        // lo guardado se toma cuando los selectores ya pusieron sus valores (al abrir o tras «Cancelar»)
+        guardado.current ??= actual
         setOk((!soloConCambios || actual !== guardado.current) && cumple(new FormData(form)))
-      }, 0)
+      }, 30)
     }
     const obs = new MutationObserver(revisar)
     obs.observe(form, { subtree: true, childList: true, attributes: true, attributeFilter: ['value'] })

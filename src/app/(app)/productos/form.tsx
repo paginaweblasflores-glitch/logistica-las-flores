@@ -14,8 +14,8 @@ export type Producto = {
   id?: string; codigo?: string; nombre?: string; descripcion?: string | null
   tipo?: string; categoria_id?: string | null; unidad_id?: string; marca?: string | null; presentacion?: string | null
   es_perecible?: boolean; controla_lote?: boolean; costo_referencia?: number; activo?: boolean
-  /** empaque: cuánto trae cada unidad (saco = 50 kilos) */
-  contenido?: number | null; contenido_unidad_id?: string | null
+  /** presentación grande (saco, caja…) y cuántas unidades del producto trae: la llena el almacén */
+  presentacion_id?: string | null; presentacion_cantidad?: number | null
 }
 
 /** Negocios donde se usa el producto: cada uno lleva su propio stock; el catálogo es uno solo. */
@@ -39,12 +39,17 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
   const crear = !p.id
   // un producto nuevo viene en «Unidad» (la estándar); se cambia si se pesa o se mide
   const unidadId = p.unidad_id ?? (crear ? unidades.find((x) => x.nombre === 'Unidad')?.id : undefined)
-  // unidad elegida: si es un empaque (saco, caja…), se pregunta cuánto trae
+  // unidad chica (en la que se guarda el stock) y presentación grande (saco, caja…: cuánto trae)
   const [uni, setUni] = useState<{ nombre: string; tipo: string } | null>(() => {
     const u = unidades.find((x) => x.id === unidadId)
     return u ? { nombre: u.nombre, tipo: u.tipo ?? 'medida' } : null
   })
-  const medidas = unidades.filter((u) => u.tipo === 'medida')
+  const medidas = unidades.filter((u) => (u.tipo ?? 'medida') === 'medida')
+  const empaques = unidades.filter((u) => u.tipo === 'empaque')
+  const [pres, setPres] = useState<string | null>(() => empaques.find((x) => x.id === p.presentacion_id)?.nombre ?? null)
+  // alta: la cantidad inicial se escribe en la unidad chica o en la presentación
+  const [en, setEn] = useState<'chica' | 'grande'>('chica')
+  const chica = (uni?.nombre ?? 'unidad').toLowerCase()
   const [categoria, setCategoria] = useState(p.categoria_id ?? '')
   const cat = categorias.find((c) => c.id === categoria)
   // categoría nueva (recién escrita) o sin zona: se avisa que falta asignarla en Configuración
@@ -59,26 +64,28 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
         {/* 1) qué es el producto (lo único que se edita después en su ficha) */}
         <Envoltura crear={crear} titulo="Datos del producto">
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="relative md:col-span-2"><label><span className="label">Nombre <span className="req">*</span></span>
+            <div className="relative flex flex-col justify-end md:col-span-2"><label><span className="label">Nombre <span className="req">*</span></span>
               <input name="nombre" required defaultValue={p.nombre} autoFocus={crear && !soloLectura} onChange={alEscribirNombre ? (e) => alEscribirNombre(e.target.value) : undefined}
                 placeholder="Ej.: GASEOSA INCA KOLA X 1 LT" className="field" /></label>{avisoNombre}</div>
-            <div><label><span className="label">Categoría</span><Select name="categoria" options={categorias} defaultValue={p.categoria_id} placeholder="—" agregar="categoria"
-              onChange={setCategoria} /></label>
-              {/* dónde se guarda en el almacén físico (zonas sanitarias: limpieza nunca junto a los alimentos) */}
-              {zona && <p className="mt-1 text-xs font-semibold" style={{ color: zona.color }} title={zona.recordatorio}>Zona: {zona.nombre}</p>}</div>
+            {/* la zona va en el título (dónde se guarda en el almacén físico): así el campo queda alineado con los demás */}
+            <label><span className="label">Categoría{zona && <span className="font-semibold normal-case" style={{ color: zona.color }} title={zona.recordatorio}> · {zona.nombre}</span>}</span>
+              <Select name="categoria" options={categorias} defaultValue={p.categoria_id} placeholder="—" agregar="categoria" onChange={setCategoria} /></label>
             <label><span className="label">Marca</span><input name="marca" defaultValue={p.marca ?? ''} className="field" /></label>
             {/* la unidad se elige o se escribe; si no existe, queda como unidad nueva */}
+            {/* la unidad chica: en ella se guarda el stock y se hacen todas las cuentas (kilo, litro, unidad) */}
             <div><span className="label">Unidad <span className="req">*</span></span>
-              <UnidadCombobox unidades={unidades} defaultValue={unidadId} disabled={soloLectura} onCambio={setUni} /></div>
-            {uni?.tipo === 'empaque' && (
-              <div className="md:col-span-2"><span className="label">¿Cuánto trae cada {uni.nombre.toLowerCase()}? <span className="font-normal normal-case text-subtle">(para pasar a otras unidades)</span></span>
-                <div className="flex gap-2">
-                  <input type="number" step="any" min="0" name="contenido" defaultValue={p.contenido ?? ''} placeholder="50"
-                    aria-label="Cuánto trae" className="field w-28 tabular" />
-                  <Select name="contenido_unidad" options={medidas} defaultValue={p.contenido_unidad_id} placeholder="—" className="flex-1" ariaLabel="Unidad del contenido" />
-                </div></div>
-            )}
-            <label className={uni?.tipo === 'empaque' ? 'md:col-span-1' : 'md:col-span-3'}><span className="label">Descripción <span className="font-normal normal-case text-subtle">(opcional)</span></span>
+              <UnidadCombobox unidades={medidas} defaultValue={unidadId} disabled={soloLectura} onCambio={setUni} /></div>
+            {/* la presentación grande (opcional): se puede escribir en ella en entradas, salidas y traspasos */}
+            <div className="md:col-span-3"><span className="label">Presentación grande <span className="font-normal normal-case text-subtle">(opcional: saco, caja…)</span></span>
+              <div className="grid grid-cols-[minmax(9rem,1fr)_auto] items-center gap-2">
+                <UnidadCombobox unidades={empaques} defaultValue={p.presentacion_id} disabled={soloLectura} nombre="presentacion" requerido={false}
+                  etiqueta="Presentación grande" placeholder="Sin presentación" onCambio={(x) => setPres(x?.nombre ?? null)} />
+                <label className="flex items-center gap-2 text-sm whitespace-nowrap">trae
+                  <input type="number" step="any" min="0" name="presentacion_cantidad" defaultValue={p.presentacion_cantidad ?? ''} required={!!pres}
+                    aria-label="Cuánto trae la presentación" className="field w-24 tabular" />
+                  {chica}</label>
+              </div></div>
+            <label className="md:col-span-4"><span className="label">Descripción <span className="font-normal normal-case text-subtle">(opcional)</span></span>
               <input name="descripcion" defaultValue={p.descripcion ?? ''} className="field" /></label>
           </div>
           {!crear && !soloLectura && <div className="mt-4 flex justify-end"><SubmitButton soloConCambios>Guardar cambios</SubmitButton></div>}
@@ -88,11 +95,14 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
           <>
             {/* 2) la cantidad que tiene hoy (una sola vez); después cambia con entradas, salidas y traspasos */}
             <Section title="Stock inicial">
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <label><span className="label">Cantidad que tiene hoy</span>
                   <input type="number" step="any" min="0" name="cantidad" defaultValue="0" className="field tabular" /></label>
-                {/* el precio es por la unidad del producto (por saco, por caja…), no por kilo */}
-                <label><span className="label">Precio por {(uni?.nombre ?? 'unidad').toLowerCase()} (S/)</span>
+                {/* en sacos o en kilos: el sistema lo guarda en la unidad chica */}
+                <label><span className="label">En</span>
+                  <Select name="en" value={en} onChange={(v) => setEn(v === 'grande' ? 'grande' : 'chica')} ariaLabel="Unidad de la cantidad"
+                    options={[{ id: 'chica', nombre: uni?.nombre ?? 'Unidad' }, ...(pres ? [{ id: 'grande', nombre: pres }] : [])]} /></label>
+                <label><span className="label">Precio por {en === 'grande' && pres ? pres.toLowerCase() : chica} (S/)</span>
                   <input type="number" step="0.0001" min="0" name="costo_referencia" placeholder="0.00" className="field tabular" /></label>
                 <label><span className="label">Fecha de vencimiento</span><input type="date" name="fecha_vencimiento" className="field tabular" /></label>
               </div>

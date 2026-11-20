@@ -14,6 +14,8 @@ export type ProductoLite = { id: string; codigo: string; nombre: string; unidad:
   stock?: number | null
   /** unidad del producto y, si es un empaque, cuánto trae (saco = 50 kilos) */
   unidad_id?: string; contenido?: number | null; contenido_unidad_id?: string | null; contenido_unidad?: string | null
+  /** presentación grande (Saco, Caja…) y cuántas unidades del producto trae */
+  presentacion_id?: string | null; presentacion_cantidad?: number | null; presentacion?: string | null
   imagen_url?: string | null }
 
 /**
@@ -60,8 +62,10 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
       setFallo(!!error)
       if (error) { setResults([]); setOpen(true); return }
       setResults(((data ?? []) as { id: string; codigo: string; nombre: string; tipo: string; costo_referencia: number; controla_lote: boolean; unidad: string; stock: number | null
-          unidad_id: string; contenido: number | null; contenido_unidad_id: string | null; contenido_unidad: string | null }[])
-        .map((p) => ({ ...p, costo_referencia: Number(p.costo_referencia), stock: p.stock === null ? null : Number(p.stock) })))
+          unidad_id: string; contenido: number | null; contenido_unidad_id: string | null; contenido_unidad: string | null
+          presentacion_id: string | null; presentacion_cantidad: number | null; presentacion: string | null }[])
+        .map((p) => ({ ...p, costo_referencia: Number(p.costo_referencia), stock: p.stock === null ? null : Number(p.stock),
+          presentacion_cantidad: p.presentacion_cantidad === null ? null : Number(p.presentacion_cantidad) })))
       setActive(0)
       setOpen(true)
     }, term.trim() ? 150 : 0)

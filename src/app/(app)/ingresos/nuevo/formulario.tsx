@@ -29,13 +29,14 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
   // compras que Logística ya marcó «Comprado» y deben llegar a este almacén (del requerimiento del almacén)
   let qCamino = supabase.from('compra')
     .select(`id, numero, fecha, fecha_compromiso, proveedor_id, oferta_id, proveedor:proveedor_id(razon_social), requerimiento:requerimiento_id(numero),
-             compra_detalle(id, producto_id, cantidad_solicitada, cantidad_pedida, requerimiento_detalle_id, pedida:unidad_pedido_id(id, nombre), producto:producto_id(nombre, controla_lote, costo_referencia, unidad_id, contenido, contenido_unidad_id, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
+             compra_detalle(id, producto_id, cantidad_solicitada, cantidad_pedida, requerimiento_detalle_id, pedida:unidad_pedido_id(id, nombre), producto:producto_id(nombre, controla_lote, costo_referencia, unidad_id, contenido, contenido_unidad_id, presentacion_id, presentacion_cantidad, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
     .eq('estado', 'aprobada').order('fecha')
   qCamino = sel.id ? qCamino.eq('almacen_id', sel.id) : local ? qCamino.eq('local_id', local.id) : qCamino
   const [almacenes, proveedores, { data: camino }] = await Promise.all([getAlmacenes(local?.id, ['almacen']), getProveedores(), qCamino])
   type CC = { id: string; numero: string; fecha: string; fecha_compromiso: string | null; proveedor_id: string | null; oferta_id: string | null; proveedor: { razon_social: string } | null; requerimiento: { numero: string } | null
     compra_detalle: { id: string; producto_id: string | null; cantidad_solicitada: number; cantidad_pedida: number | null; requerimiento_detalle_id: string | null; pedida: { id: string; nombre: string } | null
-      producto: { nombre: string; controla_lote: boolean; costo_referencia: number; unidad_id: string; contenido: number | null; contenido_unidad_id: string | null; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } | null }[] }
+      producto: { nombre: string; controla_lote: boolean; costo_referencia: number; unidad_id: string; contenido: number | null; contenido_unidad_id: string | null
+        presentacion_id: string | null; presentacion_cantidad: number | null; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } | null }[] }
   // solo las que traen productos del almacén (lo fuera de catálogo va al área, no aquí)
   const enCamino = ((camino ?? []) as unknown as CC[]).filter((c) => c.compra_detalle.some((d) => d.producto_id))
   const elegida = enCamino.find((c) => c.id === compraId)
@@ -68,6 +69,7 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
       detalle_id: d.id, producto_id: d.producto_id!, codigo: String(d.producto!.alm.find((a) => a.almacen_id === almId)?.codigo ?? '—'),
       nombre: d.producto!.nombre, unidad: d.producto!.unidad.codigo, pedido: Number(d.cantidad_solicitada), controla_lote: d.producto!.controla_lote,
       unidad_id: d.producto!.unidad_id, contenido: d.producto!.contenido, contenido_unidad_id: d.producto!.contenido_unidad_id,
+      presentacion_id: d.producto!.presentacion_id, presentacion_cantidad: d.producto!.presentacion_cantidad === null ? null : Number(d.producto!.presentacion_cantidad),
       ultimo: Number(d.producto!.costo_referencia) > 0 ? Number(d.producto!.costo_referencia) : null,
       cotizado: d.requerimiento_detalle_id ? cotizado.get(d.requerimiento_detalle_id) ?? null : null,
       enPedido: d.pedida && Number(d.cantidad_pedida) > 0 && Number(d.cantidad_pedida) !== Number(d.cantidad_solicitada)

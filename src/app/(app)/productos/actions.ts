@@ -5,6 +5,37 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { run, check, must, type ActionResult } from '@/lib/actions'
 
+/** Una unidad elegida o escrita («otra»: se guarda para la próxima vez). Vacío = ninguna. */
+async function resolverUnidad(supabase: Awaited<ReturnType<typeof createClient>>, fd: FormData, campo: string) {
+  const v = String(fd.get(campo) ?? '').trim()
+  if (!v) return null
+  return v === 'otra' ? String(must(await supabase.rpc('fn_unidad_nueva', { p_nombre: String(fd.get(`${campo}_nueva`) ?? '') }))) : v
+}
+
+/**
+ * Presentación grande del producto (saco, caja…) y cuánto trae, desde el formulario.
+ * Devuelve el error a mostrar o los datos para guardar (ninguna = sin presentación).
+ */
+async function presentacionDe(supabase: Awaited<ReturnType<typeof createClient>>, fd: FormData, unidad: string) {
+  const id = await resolverUnidad(supabase, fd, 'presentacion')
+  if (!id) return { datos: { presentacion_id: null, presentacion_cantidad: null } }
+  const trae = Number(String(fd.get('presentacion_cantidad') ?? '').replace(',', '.'))
+  if (!(trae > 0)) return { error: 'Indique cuánto trae la presentación grande (por ejemplo, 50 kilos el saco).' }
+  if (id === unidad) return { error: 'La presentación grande debe ser distinta de la unidad del producto.' }
+  return { datos: { presentacion_id: id, presentacion_cantidad: trae } }
+}
+
+/**
+ * Cantidad y precio del stock inicial pasados a la unidad del producto: si se escribió en la presentación
+ * grande («3 sacos a S/ 170»), se guarda 150 kg a S/ 3.40.
+ */
+function enUnidadChica(fd: FormData, trae: number | null) {
+  const f = fd.get('en') === 'grande' && trae && trae > 0 ? trae : 1
+  const cantidad = Number(String(fd.get('cantidad') ?? '0').replace(',', '.')) || 0
+  const p = String(fd.get('costo_referencia') ?? fd.get('precio') ?? '').replace(',', '.').trim()
+  return { cantidad: Math.round(cantidad * f * 10000) / 10000, precio: p === '' ? null : Math.round((Number(p) / f) * 10000) / 10000 }
+}
+
 export async function guardarProducto(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const supabase = await createClient()
@@ -13,33 +44,36 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
     if (!nombre) return { error: 'El nombre es obligatorio.' }
     if (!s('unidad')) return { error: 'Seleccione la unidad de medida.' }
     // «Otra…»: la unidad escrita queda guardada para la próxima vez (o se usa la que ya existe con ese nombre)
-    const unidad = s('unidad') === 'otra'
-      ? String(must(await supabase.rpc('fn_unidad_nueva', { p_nombre: s('unidad_nueva') ?? '' })))
-      : s('unidad')!
-    const precio = s('costo_referencia')
+    const unidad = (await resolverUnidad(supabase, fd, 'unidad'))!
+    const pres = await presentacionDe(supabase, fd, unidad)
+    if (pres.error) return { error: pres.error }
+    // stock inicial (alta): en la unidad chica, aunque se haya escrito en sacos o cajas
+    const ini = enUnidadChica(fd, pres.datos!.presentacion_cantidad)
+    const precio = ini.precio
     // el tipo lo pone la base según la categoría; el código lo pone el sistema (correlativo)
     const datos = {
       nombre, descripcion: s('descripcion'), categoria_id: s('categoria'), unidad_id: unidad, marca: s('marca'),
       controla_lote: true,   // todos con FIFO: cada llegada es un lote y sale primero lo más antiguo
-      // empaque (saco, caja…): cuánto trae cada uno; las unidades de medida no lo llevan
-      contenido: fd.has('contenido') && Number(s('contenido')) > 0 ? Number(s('contenido')) : null,
-      contenido_unidad_id: fd.has('contenido') && Number(s('contenido')) > 0 ? s('contenido_unidad') : null,
-      ...(precio !== null ? { costo_referencia: Number(precio) } : {}),
+      // presentación grande (saco, caja…) y cuánto trae: con ella se escribe en sacos o cajas y se convierte solo
+      ...pres.datos,
+      ...(precio !== null ? { costo_referencia: precio } : {}),
     }
     // la cantidad inicial lleva su fecha de vencimiento (opcional: lo que no vence la deja vacía)
     const vence = s('fecha_vencimiento')
     const id = s('id')
     if (id) {
       const { data: hecho, error } = await supabase.from('producto').update(datos).eq('id', id).select('id')
+      // la unidad chica ya no se cambia si hay movimientos (lo avisa la base con un mensaje claro)
+      if (error?.message?.includes('No se puede cambiar la unidad')) return { error: error.message }
       if (error) throw error
       // sin filas = no tiene permiso (Logística solo consulta)
       if (!hecho?.length) return { error: 'No puede editar este producto: lo administra el responsable del almacén de su negocio.' }
       // primera vez: la cantidad que tiene hoy en el almacén elegido (entrada «Stock inicial», una sola vez)
-      const cantidad = Number(s('cantidad') ?? 0)
+      const cantidad = ini.cantidad
       const almacen = s('almacen')
       let extra = ''
       if (almacen && cantidad > 0) {
-        const r = must(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen, p_lineas: [{ producto_id: id, cantidad, precio: precio ? Number(precio) : null, fecha_vencimiento: vence }] })) as { registrados: number; omitidos: number }
+        const r = must(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen, p_lineas: [{ producto_id: id, cantidad, precio, fecha_vencimiento: vence }] })) as { registrados: number; omitidos: number }
         extra = r.registrados ? ' Cantidad registrada: ya no se cambia aquí (cambia con ingresos, salidas, traspasos o conteos).' : ' La cantidad ya estaba registrada: no se cambió.'
         revalidatePath('/inventario', 'layout')
       }
@@ -51,7 +85,7 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
     const negocios = fd.getAll('negocio').map(String).filter(Boolean)
     const almacen = s('almacen')
     if (!negocios.length || !almacen) return { error: 'Elija arriba el almacén donde va el producto.' }
-    const cantidad = Number(s('cantidad') ?? 0)
+    const cantidad = ini.cantidad
     if (!(cantidad >= 0)) return { error: 'La cantidad no puede ser negativa.' }
     const n = must(await supabase.rpc('fn_siguiente_numero', { p_serie: 'PROD' }))
     const nuevo = must(await supabase.from('producto').insert({ ...datos, codigo: `P-${String(n).padStart(5, '0')}` }).select('id').single())
@@ -64,24 +98,29 @@ export async function guardarProducto(_: ActionResult, fd: FormData): Promise<Ac
       { onConflict: 'producto_id,almacen_id', ignoreDuplicates: true }))
     // la cantidad que tiene hoy: entrada «Stock inicial» (una sola vez)
     if (cantidad > 0) {
-      check(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen, p_lineas: [{ producto_id: nuevo.id, cantidad, precio: precio ? Number(precio) : null, fecha_vencimiento: vence }] }))
+      check(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen, p_lineas: [{ producto_id: nuevo.id, cantidad, precio, fecha_vencimiento: vence }] }))
     }
     revalidatePath('/productos')
     redirect(`/productos/${nuevo.id}`)
   })
 }
 
-/** Stock inicial del producto en un almacén: entrada «Stock inicial», UNA sola vez (si ya tiene, no se cambia). */
+/**
+ * Stock inicial del producto en un almacén: entrada «Stock inicial», UNA sola vez (si ya tiene, no se cambia).
+ * Se escribe en la unidad chica o en la presentación grande («3 sacos a S/ 170»), la que se definió en
+ * «Datos del producto»; se guarda en la unidad chica.
+ */
 export async function registrarStockInicial(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const s = (k: string) => String(fd.get(k) ?? '').trim() || null
     const id = s('producto_id'), almacen = s('almacen')
-    const cantidad = Number(s('cantidad'))
-    const precio = s('precio') === null ? null : Number(s('precio'))
     if (!id || !almacen) return { error: 'Elija el almacén.' }
-    if (!Number.isFinite(cantidad) || cantidad <= 0) return { error: 'Escriba la cantidad que tiene hoy (mayor a cero).' }
-    if (precio !== null && (!Number.isFinite(precio) || precio < 0)) return { error: 'El precio no puede ser negativo.' }
     const supabase = await createClient()
+    // cuánto trae la presentación grande (si se escribió en sacos o cajas)
+    const prod = must(await supabase.from('producto').select('presentacion_cantidad').eq('id', id).single())
+    const { cantidad, precio } = enUnidadChica(fd, prod.presentacion_cantidad === null ? null : Number(prod.presentacion_cantidad))
+    if (!(cantidad > 0)) return { error: 'Escriba la cantidad que tiene hoy (mayor a cero).' }
+    if (precio !== null && (!Number.isFinite(precio) || precio < 0)) return { error: 'El precio no puede ser negativo.' }
     const r = must(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen,
       p_lineas: [{ producto_id: id, cantidad, precio, fecha_vencimiento: s('fecha_vencimiento') }] })) as { registrados: number; omitidos: number }
     revalidatePath(`/productos/${id}`)

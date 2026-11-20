@@ -8,12 +8,15 @@ import { Select } from '@/components/select'
  * Unidad de una línea de productos (estándar de todo el sistema: entradas, salidas, traspasos,
  * requerimiento del almacén y llegada de compras).
  * Se elige en qué unidad se escribe la cantidad (y el precio): la del producto, las que el sistema convierte solo
- * (Kilo ↔ Gramo, Litro ↔ Mililitro, Saco de 50 kilos ↔ Kilo) o cualquier otra indicando cuánto trae («1 Caja = 6 UND»).
+ * (Kilo ↔ Gramo, Litro ↔ Mililitro), la PRESENTACIÓN GRANDE del producto («Saco, trae 50 kg»: la llena el almacén en
+ * la ficha) o cualquier otra indicando cuánto trae («1 Caja = 6 UND»).
  * `factorUnidad` dice cuántas unidades del producto son 1 de la unidad elegida: con eso se pasa todo a la unidad del producto.
  */
 export type Uni = { id: string; codigo: string; nombre: string; tipo: string; base_id: string | null; base_factor: number | null; orden: number }
 /** lo que hace falta del producto para convertir */
-export type ProdUnidad = { unidad_id?: string | null; unidad: string; contenido?: string | number | null; contenido_unidad_id?: string | null }
+export type ProdUnidad = { unidad_id?: string | null; unidad: string; contenido?: string | number | null; contenido_unidad_id?: string | null
+  /** presentación grande: la unidad (Saco, Caja…) y cuántas unidades del producto trae */
+  presentacion_id?: string | null; presentacion_cantidad?: string | number | null }
 
 /** las unidades activas, por id (se leen una sola vez para toda la pantalla) */
 async function leerUnidades(): Promise<Record<string, Uni>> {
@@ -55,6 +58,8 @@ function baseProducto(u: Record<string, Uni>, p: ProdUnidad) {
 export function factorUnidad(u: Record<string, Uni>, p: ProdUnidad, elegida: string | null | undefined, equivale?: string | number | null) {
   const pid = idUnidad(u, p)
   if (!elegida || elegida === pid) return 1
+  // su presentación grande: 1 saco = 50 kg (lo que el almacén puso en la ficha)
+  if (elegida === p.presentacion_id && Number(p.presentacion_cantidad) > 0) return Number(p.presentacion_cantidad)
   const a = enBase(u[elegida]), b = baseProducto(u, p)
   if (a && b && a.b === b.b && b.q) return a.q / b.q
   // «Unidad» (o docena, par) en un producto que se cuenta por empaque: 1 botella, 1 lata, 1 paquete = 1 unidad
@@ -66,7 +71,8 @@ export function factorUnidad(u: Record<string, Uni>, p: ProdUnidad, elegida: str
 export function opcionesUnidad(u: Record<string, Uni>, p: ProdUnidad, todas = true) {
   const pid = idUnidad(u, p)
   const conv = Object.values(u).filter((x) => x.id === pid || (x.id !== pid && factorUnidad(u, p, x.id) !== null))
-    .sort((a, b) => Number(b.id === pid) - Number(a.id === pid) || a.orden - b.orden)
+    // primero la del producto y su presentación grande (las dos que más se usan), luego las que convierten solas
+    .sort((a, b) => Number(b.id === pid) - Number(a.id === pid) || Number(b.id === p.presentacion_id) - Number(a.id === p.presentacion_id) || a.orden - b.orden)
   const ops = conv.map((x) => ({ id: x.id, nombre: x.nombre }))
   if (!pid) ops.unshift({ id: '', nombre: p.unidad })
   if (!todas) return ops.filter((o) => o.id)
@@ -106,3 +112,4 @@ export function UnidadCelda({ u, p, value, equivale, cantidad, onUnidad, onEquiv
     </div>
   )
 }
+

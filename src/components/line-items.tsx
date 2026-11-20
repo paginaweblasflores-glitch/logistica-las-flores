@@ -7,6 +7,9 @@ import { ProductPicker, type ProductoLite } from '@/components/product-picker'
 import { fmtDate, fmtSoles } from '@/lib/format'
 import { createClient } from '@/lib/supabase/client'
 import { useUnidades, factorUnidad, idUnidad, UnidadCelda } from '@/components/unidad-linea'
+import { enDosUnidades } from '@/lib/unidades'
+import { PrecioCelda, ImporteCelda, importeDe, repartirPrecio } from '@/components/precio-linea'
+import { EVENTO_REPARTIR } from '@/components/total-comprobante'
 
 export type LineField = {
   key: string
@@ -30,7 +33,8 @@ export type { Line }
 function lineaDe(p: ProductoLite): Line {
   return { producto_id: p.id, descripcion: p.nombre, unidad: p.unidad, codigo: p.codigo, controla_lote: p.controla_lote ? '1' : '',
     stock: p.stock === null || p.stock === undefined ? '' : String(p.stock),
-    unidad_id: p.unidad_id ?? '', contenido_unidad_id: p.contenido_unidad_id ?? '', contenido_unidad: p.contenido_unidad ?? '', contenido: p.contenido ? String(p.contenido) : '' }
+    unidad_id: p.unidad_id ?? '', contenido_unidad_id: p.contenido_unidad_id ?? '', contenido_unidad: p.contenido_unidad ?? '', contenido: p.contenido ? String(p.contenido) : '',
+    presentacion_id: p.presentacion_id ?? '', presentacion: p.presentacion ?? '', presentacion_cantidad: p.presentacion_cantidad ? String(p.presentacion_cantidad) : '' }
 }
 
 /**
@@ -137,12 +141,26 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
     }
     return out
   }
-  const update = (i: number, key: string, v: string) => setLines((ls) => ls.map((l, j) => (j === i ? tope({ ...l, [key]: v }) : l)))
+  // al cambiar cantidad, unidad o precio se olvida lo que se estaba tecleando en «importe» o «por kg» (se recalculan)
+  const update = (i: number, key: string, v: string) => setLines((ls) => ls.map((l, j) => (j === i ? tope({ ...l, [key]: v, _importe: null, _chica: null }) : l)))
+  // precio que sale del importe o del precio por unidad chica: se guarda lo tecleado para no reescribirlo mientras se escribe
+  const setPrecio = (i: number, precio: string | null, campo: '_importe' | '_chica', escrito: string) =>
+    setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...(precio !== null && priceKey ? { [priceKey]: precio } : {}), _importe: null, _chica: null, [campo]: escrito } : l)))
+  // «Repartir la diferencia» del total del comprobante: cada precio se multiplica por el mismo factor
+  useEffect(() => {
+    if (!priceKey) return
+    const f = (e: Event) => {
+      const factor = Number((e as CustomEvent).detail) || 1
+      setLines((ls) => ls.map((l) => ({ ...l, [priceKey]: repartirPrecio(String(l[priceKey] ?? ''), factor), _importe: null, _chica: null })))
+    }
+    window.addEventListener(EVENTO_REPARTIR, f)
+    return () => window.removeEventListener(EVENTO_REPARTIR, f)
+  }, [priceKey])
   const remove = (i: number) => setLines((ls) => ls.filter((_, j) => j !== i))
 
   const total = useMemo(() => {
     if (!totalKey || !priceKey) return null
-    return lines.reduce((s, l) => s + (Number(l[totalKey]) || 0) * (Number(l[priceKey]) || 0), 0)
+    return lines.reduce((s, l) => s + importeDe(l[totalKey], l[priceKey]), 0)
   }, [lines, totalKey, priceKey])
   useEffect(() => { if (total !== null) onTotal?.(total) }, [total, onTotal])
 
@@ -164,7 +182,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-line">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr>
               <th className="th w-12">Ítem</th>
@@ -183,7 +201,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
                 <td className="td">
                   <span className="font-medium">{l.descripcion}</span>
                   <span className="ml-1.5 text-xs text-muted">{l.unidad}</span>
-                  {mostrarStock && <span className="block text-xs text-muted">Stock: {l.stock ? Number(l.stock).toLocaleString('es-PE', { maximumFractionDigits: 3 }) : '0'}</span>}
+                  {mostrarStock && <span className="block text-xs text-muted">Stock: {enDosUnidades(l.stock, l.unidad, l.presentacion, l.presentacion_cantidad)}</span>}
                   {mostrarVence && (() => {
                     const e = entregar(l)
                     return e && <span className="block text-xs font-semibold text-amber-700">Entregar primero: {e.map((x, k) => (
@@ -197,6 +215,11 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
                     ) : f.type === 'unidad' ? (
                       <UnidadCelda u={unidades} p={l} value={l[f.key]} equivale={l.equivale} cantidad={totalKey ? l[totalKey] : l.cantidad} todas={f.todasUnidades}
                         onUnidad={(v) => update(i, f.key, v)} onEquivale={(v) => update(i, 'equivale', v)} etiqueta={`${f.label} de ${l.descripcion}`} />
+                    ) : f.key === priceKey ? (
+                      // precio por la unidad escrita y, debajo, por la unidad del producto (editable)
+                      <PrecioCelda precio={l[f.key] ?? ''} unidad={l.unidad} requerido={f.required} chicaEscrita={l._chica}
+                        factor={campoUnidad ? factorUnidad(unidades, l, l[campoUnidad.key], l.equivale) ?? 1 : 1}
+                        onPrecio={(v) => update(i, f.key, v)} onChica={(p, escrito) => setPrecio(i, p, '_chica', escrito)} etiqueta={`${f.label} de ${l.descripcion}`} />
                     ) : f.soloConVencimiento && l.controla_lote !== '1' ? (
                       <span className="block px-1 text-xs text-subtle" title="El producto no tiene marcado «Controlar vencimiento (FIFO)»">—</span>
                     ) : <input
@@ -212,8 +235,10 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
                   </td>
                 ))}
                 {total !== null && (
-                  <td className="td text-right font-semibold tabular">
-                    {fmtSoles((Number(l[totalKey!]) || 0) * (Number(l[priceKey!]) || 0))}
+                  <td className="td w-32 py-1.5">
+                    {/* se calcula solo; si se escribe el importe de la factura, el precio se ajusta */}
+                    <ImporteCelda cantidad={l[totalKey!]} precio={l[priceKey!] ?? ''} escrito={l._importe}
+                      onImporte={(p, escrito) => setPrecio(i, p, '_importe', escrito)} etiqueta={`Importe de ${l.descripcion}`} />
                   </td>
                 )}
                 <td className="td py-1.5">

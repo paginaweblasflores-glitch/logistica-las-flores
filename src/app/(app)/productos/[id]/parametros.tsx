@@ -14,12 +14,23 @@ type Fila = { almacen_id: string; nombre: string; stock: number | null
  * Las cantidades y las fechas de vencimiento son de Inventario (llegan con cada entrada): aquí no se muestran.
  * Máximo, ubicación y stock par ya no se piden: lo que tengan guardado se conserva.
  */
-export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = false, vencimiento = false, unidad = '' }: {
+export function ParametrosAlmacen({ productoId, filas, soloLectura = false, vencimiento = false, unidad = '' }: {
   productoId: string; filas: Fila[]; soloLectura?: boolean
   /** unidad del producto: el stock y el mínimo están en ella (sacos, unidades…) */
   unidad?: string
   /** mostrar las columnas de vencimiento (panel de almacén) */
   vencimiento?: boolean
+}) {
+  // los valores viven DENTRO del formulario: así «Cancelar» los devuelve a lo guardado
+  return (
+    <ActionForm action={guardarParametrosAlmacen} className="space-y-3">
+      <Campos productoId={productoId} inicial={filas} soloLectura={soloLectura} vencimiento={vencimiento} unidad={unidad} />
+    </ActionForm>
+  )
+}
+
+function Campos({ productoId, inicial, soloLectura, vencimiento, unidad }: {
+  productoId: string; inicial: Fila[]; soloLectura: boolean; vencimiento: boolean; unidad: string
 }) {
   const [filas, setFilas] = useState(inicial)
   const u = unidad.toLowerCase()
@@ -29,7 +40,7 @@ export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = fa
     ...(vencimiento ? { fecha_vencimiento, dias_aviso_vencimiento } : {}),
   }))
   return (
-    <ActionForm action={guardarParametrosAlmacen} className="space-y-3">
+    <>
       <input type="hidden" name="producto_id" value={productoId} />
       <input type="hidden" name="filas" value={JSON.stringify(datos)} />
       <div className="overflow-x-auto rounded-xl border border-line">
@@ -51,6 +62,6 @@ export function ParametrosAlmacen({ productoId, filas: inicial, soloLectura = fa
         </table>
       </div>
       {!soloLectura && <div className="flex justify-end"><SubmitButton variant="dark" soloConCambios>Guardar parámetros</SubmitButton></div>}
-    </ActionForm>
+    </>
   )
 }

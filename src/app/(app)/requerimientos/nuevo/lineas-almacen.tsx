@@ -28,11 +28,14 @@ export function LineasRequerimientoAlmacen({ almacenId }: { almacenId: string })
             const { data, error } = await createClient().rpc('fn_bajo_minimo', { p_almacen: almacenId })
             setCargando(false)
             if (error) { toast.error(error.message); return }
-            type B = { id: string; codigo: string; nombre: string; unidad: string; tipo: string; costo_referencia: number; controla_lote: boolean; stock: number; minimo: number }
+            type B = { id: string; codigo: string; nombre: string; unidad: string; tipo: string; costo_referencia: number; controla_lote: boolean; stock: number; minimo: number
+              unidad_id: string; presentacion_id: string | null; presentacion_cantidad: number | null; presentacion: string | null }
             const filas = (data ?? []) as B[]
             if (!filas.length) { toast.success('Ningún producto está por debajo de su mínimo.'); return }
             agregar(filas.map((b) => ({
-              p: { id: b.id, codigo: b.codigo, nombre: b.nombre, unidad: b.unidad, tipo: b.tipo, costo_referencia: Number(b.costo_referencia), controla_lote: b.controla_lote, stock: Number(b.stock) },
+              p: { id: b.id, codigo: b.codigo, nombre: b.nombre, unidad: b.unidad, tipo: b.tipo, costo_referencia: Number(b.costo_referencia), controla_lote: b.controla_lote, stock: Number(b.stock),
+                unidad_id: b.unidad_id, presentacion_id: b.presentacion_id, presentacion: b.presentacion,
+                presentacion_cantidad: b.presentacion_cantidad === null ? null : Number(b.presentacion_cantidad) },
               valores: { cantidad: String(Number(b.minimo)) },
             })))
             toast.success(`${filas.length} producto(s) bajo el mínimo agregados. Ajuste las cantidades si hace falta.`)

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo } from '@/lib/session'
 import { getAlmacenes, getCategorias } from '@/lib/queries'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
+import { enGrande } from '@/lib/unidades'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, FilterBar, FilterField, Pagination, EmptyState, LocalBadge, Note, LinkButton } from '@/components/ui'
@@ -27,7 +28,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const conCosto = panel !== 'almacen'
 
   let query = supabase.from('v_stock')
-    .select('producto_id, almacen_id, codigo, codigo_almacen, nombre, producto_tipo, categoria, unidad, local_codigo, almacen_nombre, cantidad, costo_promedio, valor, stock_minimo, stock_maximo, stock_objetivo, estado, ultimo_movimiento, imagen_url, zona', { count: 'exact' })
+    .select('producto_id, almacen_id, codigo, codigo_almacen, nombre, producto_tipo, categoria, unidad, local_codigo, almacen_nombre, cantidad, costo_promedio, valor, stock_minimo, stock_maximo, stock_objetivo, estado, ultimo_movimiento, imagen_url, zona, presentacion, presentacion_cantidad', { count: 'exact' })
   if (local) query = query.eq('local_id', local.id)
   if (almacen) query = query.eq('almacen_id', almacen)
   const alerta = sp(params, 'alerta') === '1'   // desde la campanita: por acabarse + agotados con mínimo
@@ -63,7 +64,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
 
   type Row = { producto_id: string; almacen_id: string; codigo: string; codigo_almacen: number | null; nombre: string; imagen_url: string | null; categoria: string | null; unidad: string; local_codigo: string
     almacen_nombre: string; cantidad: number; costo_promedio: number; valor: number; stock_minimo: number | null; stock_maximo: number | null
-    stock_objetivo: number | null; estado: string; ultimo_movimiento: string | null; zona: string | null }
+    stock_objetivo: number | null; estado: string; ultimo_movimiento: string | null; zona: string | null
+    /** presentación grande (Saco) y cuánto trae: el stock se ve también en ella */
+    presentacion: string | null; presentacion_cantidad: number | null }
 
   // una fila de la tabla (la misma agrupada por categoría y con páginas)
   const fila = (r: Row) => (
@@ -79,7 +82,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       </Link>
                     </Td>
                     <Td><span className="block">{r.almacen_nombre}</span><LocalBadge codigo={r.local_codigo} /></Td>
-                    <Td right className="font-semibold">{fmtQty(r.cantidad)} <span className="text-xs font-normal text-muted">{r.unidad}</span></Td>
+                    <Td right className="font-semibold">{fmtQty(r.cantidad)} <span className="text-xs font-normal text-muted">{r.unidad}</span>
+                      {/* también en su presentación grande: «2 sacos + 30 KG» */}
+                      {(() => { const g = enGrande(r.cantidad, r.unidad, r.presentacion, r.presentacion_cantidad); return g && <span className="block text-[11px] font-normal text-muted">{g}</span> })()}</Td>
                     <Td right className="text-muted">{fmtQty(r.stock_minimo)}</Td>
                     {conCosto && <>
                       <Td right>{fmtSoles(r.costo_promedio)}</Td>

@@ -11,6 +11,7 @@ import { Select } from '@/components/select'
 import { COMPROBANTES } from '@/lib/documentos'
 import { CampoGuia } from '@/components/campo-guia'
 import { TotalComprobante } from '@/components/total-comprobante'
+import { PrecioCelda, ImporteCelda, importeDe, repartirPrecio } from '@/components/precio-linea'
 
 type LineaRec = { id: string; producto: string; unidad: string; pedido: number; precio: number
   /** producto con «Controlar vencimiento (FIFO)»: llega con su fecha de vencimiento */
@@ -25,7 +26,7 @@ const num = (v: string) => Number(String(v).replace(',', '.'))
 export function Recepcion({ id, lineas, alStock = true, doc }: {
   id: string; lineas: LineaRec[]; alStock?: boolean; doc?: { tipo: string | null; numero: string | null }
 }) {
-  const [rec, setRec] = useState<Record<string, { cant: string; precio: string; vence: string; uni: string; equivale: string }>>(
+  const [rec, setRec] = useState<Record<string, { cant: string; precio: string; vence: string; uni: string; equivale: string; _importe?: string | null; _chica?: string | null }>>(
     Object.fromEntries(lineas.map((l) => [l.id, { cant: String(l.pedido), precio: String(l.precio), vence: '', uni: '', equivale: '' }])))
   const u = useUnidades()
   // cuántas unidades del producto es 1 de la unidad en que se escribió lo que llegó (cajas, paquetes…)
@@ -36,7 +37,11 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
   const [cambiarDoc, setCambiarDoc] = useState(!doc?.numero)
   const nombreDoc = COMPROBANTES.find((x) => x.id === (doc?.tipo ?? 'boleta'))?.nombre ?? 'Comprobante'
   const [ahora] = useState(ahoraLima)   // la hora de Lima al abrir el formulario
-  const suma = lineas.reduce((s, l) => s + (num(rec[l.id].cant) || 0) * (num(rec[l.id].precio) || 0), 0)
+  const suma = lineas.reduce((s, l) => s + importeDe(rec[l.id].cant, rec[l.id].precio), 0)
+  // cambiar un campo de una línea (lo tecleado en «importe» o «por unidad» se olvida: se recalcula)
+  const poner = (id: string, cambios: Record<string, string | null>) => setRec((s) => ({ ...s, [id]: { ...s[id], _importe: null, _chica: null, ...cambios } }))
+  // «Repartir el descuento» del total del comprobante entre los productos, según su importe
+  const repartir = (factor: number) => setRec((s) => Object.fromEntries(Object.entries(s).map(([k, r]) => [k, { ...r, precio: repartirPrecio(r.precio, factor), _importe: null, _chica: null }])))
   const incompleta = lineas.some((l) => num(rec[l.id].cant) * fac(l) < l.pedido)
   const conDiferencia = lineas.filter((l) => rec[l.id].precio !== '' && Math.abs(num(rec[l.id].precio) / fac(l) - l.precio) > 0.00005)
   const noCuadra = totalBoleta !== '' && Math.abs(num(totalBoleta) - suma) > 0.05
@@ -61,7 +66,7 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
               <button type="button" onClick={() => setCambiarDoc(true)} className="enlace text-xs">cambiar</button></p>
           </div>
         )}
-        <TotalComprobante suma={suma} onEscrito={setTotalBoleta} />
+        <TotalComprobante suma={suma} onEscrito={setTotalBoleta} onRepartir={repartir} />
         <label><span className="label">Fecha y hora de llegada</span><input type="datetime-local" name="fecha_entrega" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_entrega_inicial" value={ahora} /></label>
         <CampoGuia />
       </div>
@@ -80,16 +85,17 @@ export function Recepcion({ id, lineas, alStock = true, doc }: {
                     {dif && <span className="mt-0.5 block"><Badge tone="amber">Orden: {fmtSoles(l.precio)} · {num(r.precio) / fac(l) > l.precio ? 'subió' : 'bajó'}</Badge></span>}</td>
                   <td className="td text-right tabular">{l.pedido} {l.unidad}</td>
                   <td className="td py-1"><input inputMode="decimal" value={r.cant} aria-label={`Llegó de ${l.producto}`} onFocus={(e) => e.target.select()}
-                    onChange={(e) => setRec((s) => ({ ...s, [l.id]: { ...s[l.id], cant: e.target.value } }))} className="field h-8 text-right tabular" /></td>
+                    onChange={(e) => poner(l.id, { cant: e.target.value })} className="field h-8 text-right tabular" /></td>
                   <td className="td py-1"><UnidadCelda u={u} p={{ unidad: l.unidad }} value={r.uni} equivale={r.equivale} cantidad={r.cant} etiqueta={`Unidad de ${l.producto}`}
-                    onUnidad={(v) => setRec((s) => ({ ...s, [l.id]: { ...s[l.id], uni: v } }))} onEquivale={(v) => setRec((s) => ({ ...s, [l.id]: { ...s[l.id], equivale: v } }))} /></td>
-                  <td className="td py-1"><input inputMode="decimal" value={r.precio} aria-label={`Precio unitario de ${l.producto}`} onFocus={(e) => e.target.select()}
-                    onChange={(e) => setRec((s) => ({ ...s, [l.id]: { ...s[l.id], precio: e.target.value } }))} className="field h-8 text-right tabular" /></td>
+                    onUnidad={(v) => poner(l.id, { uni: v })} onEquivale={(v) => poner(l.id, { equivale: v })} /></td>
+                  <td className="td py-1"><PrecioCelda precio={r.precio} factor={fac(l)} unidad={l.unidad} chicaEscrita={r._chica} etiqueta={`Precio unitario de ${l.producto}`}
+                    onPrecio={(v) => poner(l.id, { precio: v })} onChica={(p, escrito) => poner(l.id, { precio: p, _chica: escrito })} /></td>
                   {hayVence && <td className="td py-1">{l.conVencimiento
                     ? <input type="date" value={r.vence} aria-label={`Vencimiento de ${l.producto}`}
                         onChange={(e) => setRec((s) => ({ ...s, [l.id]: { ...s[l.id], vence: e.target.value } }))} className="field h-8 tabular" />
                     : <span className="block px-1 text-xs text-subtle">—</span>}</td>}
-                  <td className="td text-right font-semibold tabular">{fmtSoles((num(r.cant) || 0) * (num(r.precio) || 0))}</td>
+                  <td className="td w-32 py-1"><ImporteCelda cantidad={r.cant} precio={r.precio} escrito={r._importe} etiqueta={`Importe de ${l.producto}`}
+                    onImporte={(p, escrito) => poner(l.id, { ...(p !== null ? { precio: p } : {}), _importe: escrito })} /></td>
                 </tr>
               )
             })}

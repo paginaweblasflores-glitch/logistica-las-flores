@@ -82,7 +82,8 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
       {/* el stock inicial, una sola vez en el almacén elegido; después cambia con entradas, salidas y traspasos */}
       {stockInicialPendiente && (
         <Section icon={PackagePlus} title="Stock inicial" className="mb-5">
-          <StockInicial productoId={id} almacenId={sel.id!} almacen={sel.actual?.corto ?? 'este almacén'} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''} />
+          <StockInicial productoId={id} almacenId={sel.id!} almacen={sel.actual?.corto ?? 'este almacén'} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''}
+            presentacion={unidades.find((u) => u.id === p.presentacion_id)?.nombre ?? null} trae={p.presentacion_cantidad === null ? null : Number(p.presentacion_cantidad)} />
         </Section>
       )}
       <Section icon={Warehouse} title="Parámetros del almacén">

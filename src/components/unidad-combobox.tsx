@@ -27,9 +27,12 @@ function reconocer(unidades: UnidadOpc[], t: string) {
  * Arriba las más usadas (según los productos reales), luego todas en orden alfabético.
  * Si lo escrito no existe, se guarda como unidad nueva con el producto y la próxima vez ya sale en la lista
  * (la base reconoce «kilos», «LITROS»… y usa la que ya hay).
- * Envía `unidad` (id, o «otra») y `unidad_nueva` (el nombre escrito).
+ * Envía `<nombre>` (id, o «otra») y `<nombre>_nueva` (el nombre escrito); por defecto `unidad`.
+ * También sirve para la presentación grande del producto (saco, caja…), que es opcional.
  */
-export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: { unidades: UnidadOpc[]; defaultValue?: string | null; disabled?: boolean
+export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio, nombre = 'unidad', requerido = true, etiqueta = 'Unidad', placeholder = 'Elija o escriba…' }: {
+  unidades: UnidadOpc[]; defaultValue?: string | null; disabled?: boolean
+  nombre?: string; requerido?: boolean; etiqueta?: string; placeholder?: string
   /** avisa la unidad elegida (las nuevas son empaques) para preguntar cuánto trae */
   onCambio?: (u: { nombre: string; tipo: string } | null) => void }) {
   const inicial = unidades.find((u) => u.id === defaultValue) ?? null
@@ -80,10 +83,10 @@ export function UnidadCombobox({ unidades, defaultValue, disabled, onCambio }: {
   let i = -1
   return (
     <div ref={boxRef} className="relative">
-      <input type="hidden" name="unidad" value={sel ? sel.id : esNueva ? 'otra' : ''} />
-      {!sel && esNueva && <input type="hidden" name="unidad_nueva" value={texto.trim()} />}
-      <input value={texto} disabled={disabled} required aria-label="Unidad" role="combobox" aria-expanded={open} aria-controls={listaId} aria-autocomplete="list"
-        placeholder="Elija o escriba…" autoComplete="off" className="field pr-8"
+      <input type="hidden" name={nombre} value={sel ? sel.id : esNueva ? 'otra' : ''} />
+      {!sel && esNueva && <input type="hidden" name={`${nombre}_nueva`} value={texto.trim()} />}
+      <input value={texto} disabled={disabled} required={requerido} aria-label={etiqueta} role="combobox" aria-expanded={open} aria-controls={listaId} aria-autocomplete="list"
+        placeholder={placeholder} autoComplete="off" className="field pr-8"
         onFocus={(e) => { e.target.select(); setOpen(true); setActive(0) }}
         onClick={() => setOpen(true)}
         onChange={(e) => { setTexto(e.target.value); setBuscando(true); setSel(null); setOpen(true); setActive(0) }}
