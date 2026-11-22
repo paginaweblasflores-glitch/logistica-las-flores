@@ -63,8 +63,11 @@ export const ALMACEN_COOKIE = 'almacen_activo'
 
 export type AlmacenPanel = { id: string; nombre: string; corto: string }
 
-/** "Almacén 01 — Las Flores" → "Almacén 01"; "Almacén 02 — Cocina Las Flores" → "Almacén 02 — Cocina" */
-const nombreCorto = (n: string) => n.replace(/\s*—\s*Las Flores$/i, '').replace(/\s+Las Flores$/i, '')
+/**
+ * Sin el negocio (ya se sabe en qué negocio se está): "Almacén 01 — Las Flores" → "Almacén 01";
+ * "Almacén 02 — Cocina Las Flores" → "Almacén 02 — Cocina"; "Almacén 02 — Hotel Umaru" → "Almacén 02"
+ */
+const nombreCorto = (n: string) => n.replace(/\s*—\s*(Las Flores|Hotel Umaru)$/i, '').replace(/\s+(Las Flores|Hotel Umaru)$/i, '')
 
 /**
  * Almacén elegido en la barra superior del panel de almacén (Todos · Almacén 01 · Almacén 02 — Cocina).
