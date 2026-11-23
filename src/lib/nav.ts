@@ -3,6 +3,7 @@ import {
   ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, FolderOpen, Building2, type LucideIcon,
 } from 'lucide-react'
 import type { Panel } from '@/lib/panel'
+import { ENVIO_STOCK_DIA } from '@/lib/stock-dia'
 
 /** Sub-pantalla dentro de un módulo desplegable */
 export type NavLink = { href: string; label: string }
@@ -34,7 +35,8 @@ export const NAV: NavModule[] = [
     label: 'Almacenes', icon: Boxes,
     items: [
       { href: '/almacenes', label: 'Resumen de almacenes' },
-      { href: '/almacenes/stock-diario', label: 'Stock del día' },
+      // «Stock del día»: solo mientras el envío diario esté activo (lib/stock-dia.ts)
+      ...(ENVIO_STOCK_DIA ? [{ href: '/almacenes/stock-diario', label: 'Stock del día' }] : []),
       { href: '/inventario/kardex', label: 'Kardex' },
       { href: '/inventario/lotes', label: 'Vencimientos' },
     ],

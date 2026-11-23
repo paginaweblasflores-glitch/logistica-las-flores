@@ -3,6 +3,7 @@ import { Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAlmacenActivo } from '@/lib/session'
 import { hoyLima } from '@/lib/format'
+import { ENVIO_STOCK_DIA } from '@/lib/stock-dia'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { AvisoEnviado } from '@/components/aviso-enviado'
@@ -15,7 +16,8 @@ import { enviarStockDia } from '@/app/(app)/almacenes/actions'
  */
 export const estadoStockDia = cache(async () => {
   const [sel, supabase] = await Promise.all([getAlmacenActivo(), createClient()])
-  const almacenes = sel.id ? sel.lista.filter((a) => a.id === sel.id) : sel.lista
+  // desactivado (semana de pruebas): no se consulta ni se pide nada
+  const almacenes = !ENVIO_STOCK_DIA ? [] : sel.id ? sel.lista.filter((a) => a.id === sel.id) : sel.lista
   if (!almacenes.length) return { almacenes, data: null, error: null }
   const { data, error } = await supabase.from('reporte_stock').select('almacen_id, enviado_at').eq('fecha', hoyLima()).in('almacen_id', almacenes.map((a) => a.id))
   return { almacenes, data, error }
