@@ -5,7 +5,9 @@ import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { Select } from '@/components/select'
 import { PrecioCelda } from '@/components/precio-linea'
-import { registrarStockInicial } from '../actions'
+import { enDosUnidades } from '@/lib/unidades'
+import { fmtDate, fmtSoles } from '@/lib/format'
+import { registrarStockInicial, deshacerStockInicial } from '../actions'
 
 const num = (v: string) => Number(v.replace(',', '.'))
 const n4 = (n: number) => n.toLocaleString('es-PE', { maximumFractionDigits: 4 })
@@ -61,9 +63,39 @@ export function StockInicial({ productoId, almacenId, almacen, unidad, presentac
         <p className="text-xs text-amber-700">Sin precio, este stock vale S/ 0 y sus salidas salen sin costo hasta la primera compra. Si lo sabe, escríbalo.</p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted">Se registra una sola vez en {almacen}. Después cambia con entradas, salidas y traspasos.</p>
-        <SubmitButton listo={(d) => Number(d.get('cantidad')) > 0}>Registrar stock inicial</SubmitButton>
+        <p className="text-xs text-muted">Se registra en {almacen}. Si no hay nada de este producto, escriba <b>0</b>. Si se equivoca, luego puede corregirlo.</p>
+        {/* 0 también vale: «no hay stock de este producto» */}
+        <SubmitButton listo={(d) => String(d.get('cantidad') ?? '') !== '' && Number(d.get('cantidad')) >= 0}>
+          {cantidad !== '' && num(cantidad) === 0 ? 'Registrar en 0 (sin stock)' : 'Registrar stock inicial'}</SubmitButton>
       </div>
+    </ActionForm>
+  )
+}
+
+/**
+ * Stock inicial ya registrado: lo que se puso y «Corregir», que lo deshace (queda anulado en el Kardex) y deja el
+ * producto «Pendiente» para cargarlo bien (si la unidad estaba mal, se cambia antes en «Datos del producto»).
+ * Solo aparece mientras el producto no tenga otros movimientos en este almacén.
+ */
+export function StockInicialRegistrado({ productoId, almacenId, unidad, presentacion, trae, registrado }: {
+  productoId: string; almacenId: string; unidad: string; presentacion: string | null; trae: number | null
+  /** null = se registró en 0 (sin stock) */
+  registrado: { cantidad: number; precio: number | null; vence: string | null; fecha: string } | null
+}) {
+  return (
+    <ActionForm action={deshacerStockInicial} className="flex flex-wrap items-center justify-between gap-3">
+      <input type="hidden" name="producto_id" value={productoId} />
+      <input type="hidden" name="almacen" value={almacenId} />
+      <p className="text-sm">
+        {registrado ? <>Registrado: <b>{enDosUnidades(registrado.cantidad, unidad, presentacion, trae)}</b>
+          {registrado.precio !== null && registrado.precio > 0 ? <> a <b>{fmtSoles(registrado.precio)}</b> por {unidad.toLowerCase()}</> : <span className="text-amber-700"> · sin precio</span>}
+          {registrado.vence && <> · vence {fmtDate(registrado.vence)}</>}
+          <span className="text-muted"> · {fmtDate(registrado.fecha, true)}</span></>
+          : <>Registrado en <b>0</b>: este producto no tenía stock.</>}
+      </p>
+      <SubmitButton variant="outline" size="sm"
+        confirm="Se deshace el stock inicial de este producto (queda anulado en el Kardex) y vuelve a «Pendiente» para cargarlo de nuevo. Si la unidad estaba mal, cámbiela en «Datos del producto» antes de volver a cargarlo.">
+        Corregir stock inicial</SubmitButton>
     </ActionForm>
   )
 }

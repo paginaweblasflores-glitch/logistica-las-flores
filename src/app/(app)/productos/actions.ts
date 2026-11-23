@@ -119,14 +119,33 @@ export async function registrarStockInicial(_: ActionResult, fd: FormData): Prom
     // cuánto trae la presentación grande (si se escribió en sacos o cajas)
     const prod = must(await supabase.from('producto').select('presentacion_cantidad').eq('id', id).single())
     const { cantidad, precio } = enUnidadChica(fd, prod.presentacion_cantidad === null ? null : Number(prod.presentacion_cantidad))
-    if (!(cantidad > 0)) return { error: 'Escriba la cantidad que tiene hoy (mayor a cero).' }
+    // 0 vale («no hay stock de este producto»); vacío no
+    if (String(fd.get('cantidad') ?? '').trim() === '' || !(cantidad >= 0)) return { error: 'Escriba la cantidad que tiene hoy (0 si no hay).' }
     if (precio !== null && (!Number.isFinite(precio) || precio < 0)) return { error: 'El precio no puede ser negativo.' }
     const r = must(await supabase.rpc('fn_inventario_inicial', { p_almacen: almacen,
       p_lineas: [{ producto_id: id, cantidad, precio, fecha_vencimiento: s('fecha_vencimiento') }] })) as { registrados: number; omitidos: number }
     revalidatePath(`/productos/${id}`)
     revalidatePath('/productos')
     revalidatePath('/inventario', 'layout')
-    return r.registrados ? { message: 'Stock inicial registrado: ya está en Inventario y en el Kardex.' } : { error: 'Este producto ya tenía su stock inicial: no se cambió.' }
+    if (!r.registrados) return { error: 'Este producto ya tenía su stock inicial: use «Corregir stock inicial» si estaba mal.' }
+    return { message: cantidad > 0 ? 'Stock inicial registrado: ya está en Inventario y en el Kardex.' : 'Registrado en 0: este producto no tiene stock.' }
+  })
+}
+
+/**
+ * «Corregir stock inicial»: lo deshace (queda anulado en el Kardex) y el producto vuelve a «Pendiente» para cargarlo
+ * de nuevo, incluso con otra unidad. Solo si el producto aún no tiene otros movimientos en ese almacén.
+ */
+export async function deshacerStockInicial(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const id = String(fd.get('producto_id') ?? ''), almacen = String(fd.get('almacen') ?? '')
+    if (!id || !almacen) return { error: 'Elija el almacén.' }
+    const supabase = await createClient()
+    check(await supabase.rpc('fn_deshacer_stock_inicial', { p_almacen: almacen, p_producto: id }))
+    revalidatePath(`/productos/${id}`)
+    revalidatePath('/productos')
+    revalidatePath('/inventario', 'layout')
+    return { message: 'Stock inicial deshecho: vuelva a cargarlo (si la unidad estaba mal, cámbiela primero en «Datos del producto»).' }
   })
 }
 

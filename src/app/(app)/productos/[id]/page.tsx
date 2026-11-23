@@ -8,7 +8,7 @@ import { PageHeader, Section, LinkButton } from '@/components/ui'
 import { ProductoForm, type Producto } from '../form'
 import { ParametrosAlmacen } from './parametros'
 import { FotoProducto } from './foto'
-import { StockInicial } from './stock-inicial'
+import { StockInicial, StockInicialRegistrado } from './stock-inicial'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { Badge } from '@/components/ui'
@@ -20,12 +20,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
   const { id } = await params
   const supabase = await createClient()
   // todo lo de la ficha al mismo tiempo (incluida la sesión y si el producto ya tiene historial)
-  const [{ data: p }, categorias, unidades, almacenes, { data: stock }, { data: pa }, , locales, { data: pl }, panel, sel, todos, { data: conHistorial }] = await Promise.all([
+  const [{ data: p }, categorias, unidades, almacenes, { data: stock }, { data: pa }, { data: movs }, locales, { data: pl }, panel, sel, todos, { data: conHistorial }] = await Promise.all([
     supabase.from('producto').select('*').eq('id', id).maybeSingle(),
     getCategorias(), getUnidades(), getAlmacenes(),
     supabase.from('stock').select('almacen_id, cantidad, costo_promedio, valor').eq('producto_id', id),
     supabase.from('producto_almacen').select('almacen_id, codigo, stock_minimo, stock_maximo, stock_objetivo, ubicacion, fecha_vencimiento, dias_aviso_vencimiento').eq('producto_id', id),
-    Promise.resolve({ data: null }),   // el precio va abajo: necesita el código maestro y la unidad del producto
+    // sus movimientos vigentes: para mostrar el stock inicial registrado y saber si todavía se puede corregir
+    supabase.from('movimiento_detalle').select('cantidad, costo_unitario, fecha_vencimiento, movimiento:movimiento_id!inner(tipo, anulado, almacen_id, fecha)')
+      .eq('producto_id', id).eq('movimiento.anulado', false),
     getMisLocales(),
     supabase.from('producto_local').select('local_id, codigo').eq('producto_id', id),
     getPanel(), getAlmacenActivo(), getLocales(),
@@ -48,6 +50,12 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
   // Almacenes del responsable y en cuáles está el producto (Almacén 01 / Almacén 02 — Cocina)
   const enAlmacen = new Set((pa ?? []).map((x) => x.almacen_id))
   const stockInicialPendiente = editable && !!sel.id && enAlmacen.has(sel.id) && !st.some((x) => x.almacen_id === sel.id)
+  // ya registrado: se muestra lo que se puso y, si el producto aún no tiene otros movimientos en este almacén, se puede corregir
+  type Mov = { cantidad: number; costo_unitario: number | null; fecha_vencimiento: string | null; movimiento: { tipo: string; almacen_id: string; fecha: string } }
+  const enEste = ((movs ?? []) as unknown as Mov[]).filter((m) => m.movimiento.almacen_id === sel.id)
+  const inicial = enEste.find((m) => m.movimiento.tipo === 'stock_inicial') ?? null
+  const otrosMovimientos = enEste.some((m) => m.movimiento.tipo !== 'stock_inicial')
+  const stockInicialHecho = editable && !!sel.id && enAlmacen.has(sel.id) && st.some((x) => x.almacen_id === sel.id) && !otrosMovimientos
   // Cada almacén ve y ajusta los parámetros de los almacenes donde está el producto
   const filas = almacenes.filter((a) => !almacen || (misIds.has(String(a.local_id)) && enAlmacen.has(a.id) && sel.lista.some((x) => x.id === a.id))).map((a) => {
     const x = params_.get(a.id), s = st.find((y) => y.almacen_id === a.id)
@@ -84,6 +92,14 @@ export default async function ProductoPage({ params }: { params: Promise<{ id: s
         <Section icon={PackagePlus} title="Stock inicial" className="mb-5">
           <StockInicial productoId={id} almacenId={sel.id!} almacen={sel.actual?.corto ?? 'este almacén'} unidad={unidades.find((u) => u.id === p.unidad_id)?.nombre ?? ''}
             presentacion={unidades.find((u) => u.id === p.presentacion_id)?.nombre ?? null} trae={p.presentacion_cantidad === null ? null : Number(p.presentacion_cantidad)} />
+        </Section>
+      )}
+      {stockInicialHecho && (
+        <Section icon={PackagePlus} title="Stock inicial" className="mb-5">
+          <StockInicialRegistrado productoId={id} almacenId={sel.id!} unidad={unidades.find((u) => u.id === p.unidad_id)?.codigo ?? ''}
+            presentacion={unidades.find((u) => u.id === p.presentacion_id)?.nombre ?? null} trae={p.presentacion_cantidad}
+            registrado={inicial ? { cantidad: Number(inicial.cantidad), precio: inicial.costo_unitario === null ? null : Number(inicial.costo_unitario),
+              vence: inicial.fecha_vencimiento, fecha: inicial.movimiento.fecha } : null} />
         </Section>
       )}
       <Section icon={Warehouse} title="Parámetros del almacén">
