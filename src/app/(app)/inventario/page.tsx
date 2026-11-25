@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { Boxes, ScrollText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getAmbito, getPanel, getAlmacenActivo } from '@/lib/session'
+import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
+import { AjustarStock } from './ajustar'
 import { getAlmacenes, getCategorias } from '@/lib/queries'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { enGrande } from '@/lib/unidades'
@@ -26,6 +27,8 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   const q = sp(params, 'q'), almacen = sp(params, 'almacen') || sel.id || '', estado = sp(params, 'estado'), categoria = sp(params, 'categoria')
   // costo y valor del inventario: solo Logística. El almacén trabaja con cantidades; sus precios reales están en Entradas
   const conCosto = panel !== 'almacen'
+  // el almacén ajusta el stock de SU almacén elegido (con «Todos» solo consulta)
+  const puedeAjustar = panel === 'almacen' && !soloConsulta(sel)
 
   let query = supabase.from('v_stock')
     .select('producto_id, almacen_id, codigo, codigo_almacen, nombre, producto_tipo, categoria, unidad, local_codigo, almacen_nombre, cantidad, costo_promedio, valor, stock_minimo, stock_maximo, stock_objetivo, estado, ultimo_movimiento, imagen_url, zona, presentacion, presentacion_cantidad', { count: 'exact' })
@@ -98,6 +101,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                             className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-xs font-semibold whitespace-nowrap text-ink-700 hover:border-brand-600 hover:text-brand-600">
                         <ScrollText className="size-3.5" /> Kardex
                       </Link>
+                      {puedeAjustar && r.almacen_id === sel.id && (
+                        <span className="mt-1 block"><AjustarStock productoId={r.producto_id} almacenId={r.almacen_id} nombre={r.nombre} unidad={r.unidad} actual={Number(r.cantidad)} /></span>
+                      )}
                     </Td>
                   </tr>
   )

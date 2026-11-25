@@ -56,3 +56,42 @@ export async function anularMovimiento(_: ActionResult, fd: FormData): Promise<A
     return { message: 'Movimiento anulado: el stock fue revertido y queda el motivo.' }
   })
 }
+
+/** Motivos del ajuste de inventario (lo que explica por qué no cuadraba). */
+const MOTIVOS_AJUSTE = ['Faltante', 'Sobrante', 'Error de registro', 'Merma', 'Vencido', 'Otro']
+
+/**
+ * «Ajustar» desde Inventario: se escribe la cantidad que hay realmente y el sistema registra solo un ajuste por la
+ * diferencia (positivo si sobra, negativo si falta), con su motivo. El stock queda igual a lo contado y el Kardex
+ * guarda el ajuste: nunca se edita el número a mano.
+ */
+export async function ajustarStock(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const producto = String(fd.get('producto_id') ?? ''), almacen = String(fd.get('almacen') ?? '')
+    const texto = String(fd.get('contado') ?? '').replace(',', '.').trim()
+    const contado = Number(texto)
+    const motivo = String(fd.get('motivo') ?? '')
+    if (!producto || !almacen) return { error: 'Elija arriba el almacén.' }
+    if (texto === '' || !(contado >= 0)) return { error: 'Escriba la cantidad que hay realmente (0 si no hay).' }
+    if (!MOTIVOS_AJUSTE.includes(motivo)) return { error: 'Elija el motivo del ajuste.' }
+    const supabase = await createClient()
+    // la diferencia se calcula con el stock de ESTE momento (no con el que se veía en pantalla)
+    const { data: s, error: e } = await supabase.from('stock').select('cantidad').eq('producto_id', producto).eq('almacen_id', almacen).maybeSingle()
+    if (e) throw e
+    const actual = Number(s?.cantidad ?? 0)
+    const diferencia = Math.round((contado - actual) * 10000) / 10000
+    if (diferencia === 0) return { error: `El stock ya es ${actual}: no hay nada que ajustar.` }
+    const obs = String(fd.get('observacion') ?? '').trim()
+    check(await supabase.rpc('fn_registrar_entrada_salida', {
+      p_tipo: diferencia > 0 ? 'ajuste_positivo' : 'ajuste_negativo',
+      p_almacen: almacen,
+      p_lineas: [{ producto_id: producto, cantidad: Math.abs(diferencia), costo_unitario: null, fecha_vencimiento: null, observacion: null }],
+      p_fecha: new Date().toISOString(), p_area: '', p_recibe: '', p_documento: 'AJUSTE DE INVENTARIO', p_motivo: null,
+      p_observacion: `${motivo}: el sistema tenía ${actual} y se contó ${contado}${obs ? ` · ${obs}` : ''}`,
+    }))
+    revalidatePath('/inventario', 'layout')
+    revalidatePath('/entradas', 'layout')
+    revalidatePath('/salidas', 'layout')
+    return { message: `Ajustado: ${diferencia > 0 ? 'sobraban' : 'faltaban'} ${Math.abs(diferencia)}. El stock quedó en ${contado}.` }
+  })
+}

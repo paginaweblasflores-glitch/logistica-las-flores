@@ -6,14 +6,12 @@ export type Sentido = 'entrada' | 'salida'
 
 /** Tipos que el almacén registra a mano en cada pantalla (las compras y traspasos tienen su propio formulario). */
 export const TIPOS_MANUALES: Record<Sentido, { codigo: string; nombre: string; ayuda: string }[]> = {
-  entrada: [
-    { codigo: 'ajuste_positivo', nombre: 'Sobrante', ayuda: 'Hay más de lo que dice el sistema.' },
-  ],
+  // el sobrante y el faltante se registran con «Ajustar» en Inventario (escribiendo lo que hay realmente)
+  entrada: [],
   salida: [
     { codigo: 'salida_consumo', nombre: 'Salida a un área', ayuda: '' },
     { codigo: 'merma', nombre: 'Merma / pérdida', ayuda: 'Producto vencido, malogrado o roto.' },
     { codigo: 'devolucion_proveedor', nombre: 'Devolución a proveedor', ayuda: 'Se devuelve al proveedor.' },
-    { codigo: 'ajuste_negativo', nombre: 'Faltante', ayuda: 'Hay menos de lo que dice el sistema.' },
   ],
 }
 
