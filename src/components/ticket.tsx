@@ -35,12 +35,25 @@ export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: 
     return () => {
       pendientes.current.forEach((cancelar) => cancelar()); pendientes.current = []
       document.documentElement.classList.remove('imprimiendo-ticket')
+      document.getElementById('hoja-ticket')?.remove()   // las demás impresiones (OC, resumen) vuelven a A4
     }
   }, [])
 
   function imprimir() {
     const html = document.documentElement
-    const fin = () => { html.classList.remove('imprimiendo-ticket'); window.removeEventListener('afterprint', fin) }
+    // la hoja del ticket (80 mm, sin márgenes) se impone para TODA la impresión mientras dura: algunos navegadores
+    // no aplican la «página con nombre» (@page ticket) y usaban la hoja A4 del sistema, achicando el ticket y
+    // agregando fecha y título de la pestaña. Sin márgenes, el navegador tampoco imprime esos encabezados.
+    let hoja = document.getElementById('hoja-ticket')
+    if (!hoja) {
+      hoja = document.createElement('style')
+      hoja.id = 'hoja-ticket'
+      hoja.textContent = '@page { size: 80mm auto !important; margin: 0 !important; } @media print { html, body { width: 80mm !important; } }'
+      document.head.appendChild(hoja)
+    }
+    const fin = () => {
+      html.classList.remove('imprimiendo-ticket'); document.getElementById('hoja-ticket')?.remove(); window.removeEventListener('afterprint', fin)
+    }
     html.classList.add('imprimiendo-ticket')
     window.addEventListener('afterprint', fin)
     // espera el logo (si no, sale roto en la tiquetera)
