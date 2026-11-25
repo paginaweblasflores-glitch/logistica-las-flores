@@ -11,7 +11,9 @@ import { inicioDiaLima, finDiaLima } from '@/lib/format'
  * Exporta una vista/tabla a Excel (.xlsx) respetando filtros de igualdad y rango de fechas.
  * Descarga en páginas de 1 000 filas para soportar grandes volúmenes.
  */
-export function ExportButton({ filename, table, rpc, columns, filters = {}, dateColumn, desde, hasta, order, desc = false, pie, label = 'Excel' }: {
+export function ExportButton({ filename, table, rpc, columns: todas, opcionales = [], filters = {}, dateColumn, desde, hasta, order, desc = false, pie, label = 'Excel' }: {
+  /** columnas que se omiten si en TODAS las filas están vacías o en cero (si una sola tiene dato, salen completas) */
+  opcionales?: string[]
   /** en lugar de una vista: una función de la base que ya devuelve las filas armadas (reportes con cálculos) */
   rpc?: { fn: string; args: Record<string, unknown> }
   /** lo más reciente primero (como en pantalla) */
@@ -42,7 +44,7 @@ export function ExportButton({ filename, table, rpc, columns, filters = {}, date
         rows.push(...((data ?? []) as Record<string, unknown>[]))
       }
       for (let from = 0; !rpc && table; from += 1000) {
-        let q = supabase.from(table).select(Object.keys(columns).join(','))
+        let q = supabase.from(table).select(Object.keys(todas).join(','))
         for (const [k, v] of Object.entries(filters)) {
           if (Array.isArray(v)) q = q.in(k, v)
           else if (v) q = q.eq(k, v)
@@ -55,6 +57,9 @@ export function ExportButton({ filename, table, rpc, columns, filters = {}, date
         rows.push(...((data ?? []) as unknown as Record<string, unknown>[]))
         if (!data || data.length < 1000 || rows.length > 200_000) break
       }
+      // columnas opcionales sin ningún dato (todas vacías o en cero): no van en el Excel
+      const vacia = (v: unknown) => v === null || v === undefined || v === '' || Number(v) === 0
+      const columns = Object.fromEntries(Object.entries(todas).filter(([k]) => !opcionales.includes(k) || rows.some((r) => !vacia(r[k]))))
       const XLSX = await import('xlsx')
       // solo las cantidades pasan a número: los códigos y documentos quedan como texto («00123» no se vuelve 123)
       const esCodigo = (k: string, label: string) => /codigo|cod|cód|nro|numero|n°|documento|guia|guía|ruc|serie|placa|telefono/i.test(`${k} ${label}`)

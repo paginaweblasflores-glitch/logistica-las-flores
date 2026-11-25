@@ -84,23 +84,26 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Descarga titulo="Stock actual" texto="La cantidad exacta de cada producto hoy, como en Inventario (una fila por producto).">
             <ExportButton label="Stock actual" filename={`stock_${local.codigo}_${hoy}`} rpc={{ fn: 'fn_reporte_stock', args: { p_local: local.id, p_almacen: sel.id } }}
+              opcionales={['en_presentacion', 'costo_promedio', 'valor', 'minimo']}
               columns={{ almacen: 'Almacén', codigo: 'Cód.', producto: 'Producto', zona: 'Zona', categoria: 'Categoría', unidad: 'Unidad', stock: 'Stock',
                 en_presentacion: 'En presentación grande', costo_promedio: 'Costo promedio', valor: 'Valor', minimo: 'Mínimo', estado: 'Estado' }} />
           </Descarga>
           <Descarga titulo="Resumen del periodo" texto="Por producto: stock al inicio + entradas − salidas = stock al final.">
             <ExportButton label="Resumen del periodo" filename={`resumen_${local.codigo}_${desde}_${hasta}`}
               rpc={{ fn: 'fn_reporte_resumen', args: { p_local: local.id, p_almacen: sel.id, p_desde: desde, p_hasta: hasta } }}
+              opcionales={['costo_promedio', 'valor_final']}
               columns={{ almacen: 'Almacén', codigo: 'Cód.', producto: 'Producto', categoria: 'Categoría', unidad: 'Unidad', stock_inicio: 'Stock al inicio',
                 entradas: 'Entradas', salidas: 'Salidas', stock_final: 'Stock al final', costo_promedio: 'Costo promedio', valor_final: 'Valor final' }} />
           </Descarga>
           <Descarga titulo="Movimientos (Kardex)" texto="Cada entrada y salida, una por una, con el stock que quedó después de cada una.">
             <ExportButton label="Movimientos" filename={`movimientos_${local.codigo}_${desde}_${hasta}`} table="v_kardex" columns={COLS}
+              opcionales={['costo_unitario', 'importe', 'documento', 'motivo_nombre', 'observacion']}
               dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
               filters={{ local_id: local.id, almacen_id: sel.id ?? undefined }} />
           </Descarga>
           <Descarga titulo="Compras del periodo" texto="Qué se compró, a quién, con qué comprobante y a qué precio.">
             {/* el cuadro que pide el Sr. Vladimir: cada compra con su fecha, comprobante, marca, cantidad, precio y total */}
-            <ExportButton label="Compras" filename={`compras_${desde}_${hasta}`} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
+            <ExportButton label="Compras" filename={`compras_${desde}_${hasta}`} opcionales={['marca', 'numero_documento']} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
               filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local.id : undefined, fuera_de_catalogo: 'false' }}
               columns={{ fecha_ingreso: 'Fecha de entrada', almacen: 'Almacén', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
                 codigo_almacen: 'Cód.', producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unitario', total: 'Total' }} />
