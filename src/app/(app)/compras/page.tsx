@@ -37,7 +37,8 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   // la lista, el resumen (agregado en la base) y las listas de los filtros: al mismo tiempo
   const [{ data, count }, { data: resumen }, proveedores, ciudades] = await Promise.all([
     q.order('fecha', { ascending: false }).order('numero', { ascending: false }).range(from, to),
-    supabase.rpc('fn_compras_resumen', { p_local: local?.id ?? null, p_desde: desde, p_hasta: hasta }),
+    // el total suma solo las órdenes de la lista (sin las compras directas del almacén)
+    supabase.rpc('fn_compras_resumen', { p_local: local?.id ?? null, p_desde: desde, p_hasta: hasta, p_solo_ordenes: true }),
     getProveedores(), getCiudades(),
   ])
   // avance de la carpeta de cada compra (sus documentos vienen en la misma consulta)

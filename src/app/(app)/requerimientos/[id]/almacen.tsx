@@ -1,12 +1,15 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { PackageCheck } from 'lucide-react'
+import { PackageCheck, Printer } from 'lucide-react'
+import { ocCompleta, totalOrden } from '@/lib/orden-compra'
 import { fmtDate, fmtQty, fmtSoles, ahoraLima } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { PrintButton } from '@/components/print-button'
 import { AprobacionAlmacen } from './aprobacion-almacen'
+import { EnviarWhatsApp } from './enviar-whatsapp'
+import { LOGO_DOC } from '@/lib/empresa'
 import { cotizarRequerimiento, comprarRequerimientoAlmacen } from '../actions'
 
 export type DetAlm = { id: string; producto_id: string | null; descripcion: string; stock_actual: number | null; cantidad_solicitada: number
@@ -26,8 +29,12 @@ type R = { id: string; numero: string; estado: string; parcial: boolean; almacen
  * «Comprado» eligiendo el proveedor, sin precios. La llegada (cantidades reales, precio y boleta) la registra
  * el almacén en Entradas; ahí se cierra, completo o parcial.
  */
-export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen }: {
+export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, negocio, whatsapp }: {
   r: R; det: DetAlm[]; compras: CompraAlm[]; cots: { id: string; numero: string; estado: string }[]
+  /** el negocio del requerimiento (logo, razón social y RUC en la imagen y en la hoja impresa) */
+  negocio: { codigo: string; nombre: string; razon_social: string; ruc: string } | null
+  /** número de WhatsApp (solo dígitos) al que se envía la imagen del requerimiento aprobado */
+  whatsapp: string
   gestiona: boolean; esAlmacen: boolean
 }) {
   const vigentes = compras.filter((c) => c.estado !== 'anulada')
@@ -50,6 +57,9 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
   const conObs = det.some((d) => d.motivo)
   // aprobado y aún sin compra ni cotización: Fernanda compra directo («Comprado») o pide cotización
   const porComprar = gestiona && r.estado === 'aprobado' && !vigentes.length && !cotVigente
+  // lo aprobado (para la imagen de WhatsApp y la hoja impresa) y el logo del negocio
+  const aprobadas = det.filter((d) => Number(d.cantidad_aprobada ?? d.cantidad_solicitada) > 0)
+  const logo = LOGO_DOC[negocio?.codigo ?? 'LF'] ?? LOGO_DOC.LF
   const aprobadoTxt = (d: DetAlm) => { const a = Number(d.cantidad_aprobada ?? d.cantidad_solicitada); return enPedido(d) ? `${fmtQty(a / factor(d))} ${unidadPedido(d)}` : `${fmtQty(a)} ${d.producto?.unidad.codigo ?? ''}` }
 
   return (
@@ -58,13 +68,24 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
         description={`${r.almacen_nombre ?? 'Almacén'} · pedido el ${fmtDate(r.created_at, true)}${r.fecha_requerida ? ` · para el ${fmtDate(r.fecha_requerida)}` : ''}`}
         actions={<>
           {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : <EstadoBadge estado={r.estado} />}
-          {gestiona && ['aprobado', 'comprado'].includes(r.estado) && <PrintButton label="Imprimir" />}
+          {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
+          {gestiona && ['aprobado', 'comprado'].includes(r.estado) && <>
+            <EnviarWhatsApp numero={whatsapp} titulo={`Requerimiento ${r.numero}`}
+              detalle={`${r.almacen_nombre ?? 'Almacén'}${r.aprobado_at ? ` · aprobado el ${fmtDate(r.aprobado_at, true)}` : ''}`}
+              empresa={negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'} ruc={negocio?.ruc ?? '—'} logo={logo}
+              filas={aprobadas.map((d) => ({ codigo: String(codigo(d)), producto: d.descripcion, cantidad: aprobadoTxt(d) }))} observacion={r.observacion} />
+            <PrintButton label="Imprimir / PDF" />
+          </>}
           {porComprar && (
             <ActionForm action={cotizarRequerimiento}><input type="hidden" name="id" value={r.id} />
               <SubmitButton variant="outline" confirm="¿Pasar a cotización? Se crea el cuadro comparativo con los productos aprobados.">Solicitar cotización</SubmitButton></ActionForm>
           )}
           {cotVigente && <LinkButton href={`/cotizaciones/${cotVigente.id}`} variant="outline">Ver cotización {cotVigente.numero}</LinkButton>}
           {vigentes.map((c) => <LinkButton key={c.id} href={`/compras/${c.id}`} variant="outline">{vigentes.length > 1 ? 'Compra' : 'Ver compra'} {c.numero}</LinkButton>)}
+          {/* la OC, cuando ya tiene proveedor y precios (Logística) */}
+          {gestiona && vigentes.filter((c) => ocCompleta({ estado: c.estado, proveedor: c.proveedor, total: totalOrden(c.compra_detalle) })).map((c) => (
+            <LinkButton key={`oc-${c.id}`} href={`/compras/${c.id}/orden`} variant="outline"><Printer className="size-4" /> Imprimir OC{vigentes.length > 1 ? ` ${c.numero}` : ''}</LinkButton>
+          ))}
         </>} />
 
       {enCamino.length > 0 && (
@@ -133,13 +154,15 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
       {/* hoja para imprimir (PDF): lo aprobado, para ir a comprar */}
       <section className="documento print-area hidden print:block">
         <header className="mb-4 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-3">
-          <div className="flex items-center gap-3"><Image src="/logo.png" alt="" width={48} height={48} />
-            <div><p className="font-bold">Requerimiento {r.numero}</p><p className="text-xs">{r.almacen_nombre} · pedido el {fmtDate(r.created_at, true)}</p></div></div>
-          {r.aprobado_at && <p className="text-xs">Aprobado el {fmtDate(r.aprobado_at, true)}</p>}
+          <div className="flex items-center gap-3"><Image src={logo} alt="" width={120} height={52} className="h-12 w-auto object-contain" />
+            <div><p className="font-bold">{negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p></div></div>
+          <div className="text-right"><p className="font-bold">Requerimiento {r.numero}</p>
+            <p className="text-xs">{r.almacen_nombre} · pedido el {fmtDate(r.created_at, true)}</p>
+            {r.aprobado_at && <p className="text-xs">Aprobado el {fmtDate(r.aprobado_at, true)}</p>}</div>
         </header>
         <table className="w-full text-sm">
           <thead><tr><th className="th text-left">Ítem</th><th className="th text-right">Cód.</th><th className="th text-left">Producto</th><th className="th text-right">Cantidad</th></tr></thead>
-          <tbody>{det.filter((d) => Number(d.cantidad_aprobada ?? d.cantidad_solicitada) > 0).map((d, i) => (
+          <tbody>{aprobadas.map((d, i) => (
             <tr key={d.id}><td className="td">{i + 1}</td><td className="td text-right font-mono">{codigo(d)}</td><td className="td">{d.descripcion}</td><td className="td text-right">{aprobadoTxt(d)}</td></tr>
           ))}</tbody>
         </table>

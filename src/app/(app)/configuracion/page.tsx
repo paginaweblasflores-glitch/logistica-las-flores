@@ -17,7 +17,7 @@ const PCT = new Set(['meta_otif', 'meta_diferencia_inventario', 'meta_fifo', 'me
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
   const [{ data: params }, { data: cierres }, { data: usuarios }, { data: roles }, { data: almacenes }, { data: areas }, locales, { data: aprobadores }, { data: cats }] = await Promise.all([
-    supabase.from('parametro').select('clave, valor, descripcion').order('clave'),
+    supabase.from('parametro').select('clave, valor, valor_texto, descripcion').order('clave'),
     supabase.from('periodo_cierre').select('local_id, anio, mes, cerrado, cerrado_at, local:local_id(nombre)').order('anio', { ascending: false }).order('mes', { ascending: false }),
     supabase.from('usuario').select('id, username, nombre, rol, todos_locales, activo'),
     supabase.from('rol').select('codigo, nombre, descripcion'),
@@ -37,6 +37,13 @@ export default async function ConfiguracionPage() {
           <ActionForm action={guardarParametros} className="space-y-3">
             {(params ?? []).map((p) => {
               const pct = PCT.has(p.clave)
+              // parámetros de texto (p. ej. el WhatsApp de los requerimientos): sin número
+              if (p.valor === null) return (
+                <label key={p.clave} className="grid grid-cols-[1fr_180px] items-center gap-3 border-b border-line/70 pb-3 text-sm">
+                  <span><span className="block font-medium">{p.descripcion}</span><span className="text-xs text-muted">{p.clave === 'whatsapp_requerimientos' ? 'Con el código del país: 51 997 615 449' : p.clave}</span></span>
+                  <input name={`t_${p.clave}`} defaultValue={p.valor_texto ?? ''} className="field tabular" inputMode="tel" />
+                </label>
+              )
               return (
                 <label key={p.clave} className="grid grid-cols-[1fr_140px] items-center gap-3 border-b border-line/70 pb-3 text-sm">
                   <span><span className="block font-medium">{p.descripcion}</span><span className="text-xs text-muted">{p.clave}</span></span>

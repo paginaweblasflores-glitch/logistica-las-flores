@@ -10,6 +10,14 @@ export async function guardarParametros(_: ActionResult, fd: FormData): Promise<
   return run(async () => {
     const supabase = await createClient()
     for (const [k, v] of fd.entries()) {
+      // parámetro de texto: el WhatsApp se guarda solo con dígitos (51997615449)
+      if (k.startsWith('t_')) {
+        const clave = k.slice(2)
+        const texto = clave === 'whatsapp_requerimientos' ? String(v).replace(/\D/g, '') : String(v).trim()
+        if (clave === 'whatsapp_requerimientos' && texto && !/^\d{9,15}$/.test(texto)) return { error: 'El WhatsApp debe tener el código del país y el número (ej.: 51 997 615 449).' }
+        check(await supabase.from('parametro').update({ valor_texto: texto || null, updated_at: new Date().toISOString() }).eq('clave', clave))
+        continue
+      }
       if (!k.startsWith('p_')) continue
       const clave = k.slice(2)
       const esPct = fd.get(`pct_${clave}`) === '1'

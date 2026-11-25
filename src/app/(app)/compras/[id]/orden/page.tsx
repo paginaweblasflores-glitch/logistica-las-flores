@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getLocales, getPanel } from '@/lib/session'
 import { LOGO_DOC } from '@/lib/empresa'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
-import { PageHeader, EstadoBadge, LinkButton } from '@/components/ui'
+import { PageHeader, EstadoBadge, LinkButton, Note } from '@/components/ui'
+import { ocCompleta, imprimeOC, AVISO_OC } from '@/lib/orden-compra'
 import { PrintButton } from '@/components/print-button'
 
 export const metadata = { title: 'Orden de compra' }
@@ -34,7 +35,8 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
     // entrega pactada o, si no se pactó, la aprobación + el plazo de Configuración (lo mismo que «Debe llegar»)
     supabase.from('v_compra_resumen').select('fecha_objetivo').eq('id', id).maybeSingle(),
   ])
-  if (!c || c.sin_orden) notFound()
+  // la OC es de Logística y Contabilidad; el almacén no la abre
+  if (!c || c.sin_orden || !imprimeOC(panel)) notFound()
   const firmantes = [c.created_by, c.aprobada_por].filter(Boolean) as string[]
   const { data: usuarios } = firmantes.length ? await supabase.from('usuario').select('id, nombre').in('id', firmantes) : { data: [] }
   const nombre = (u: string | null) => usuarios?.find((x) => x.id === u)?.nombre ?? null
@@ -51,7 +53,15 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
   const total = c.incluye_igv ? suma : r2(suma * (1 + IGV))
   const igv = r2(total - subtotal)
   const sinPrecio = suma === 0
-
+  // incompleta (sin proveedor o sin precios): no se imprime todavía
+  if (!ocCompleta({ estado: c.estado, proveedor, total: suma })) {
+    return (
+      <>
+        <PageHeader title={`Orden de compra ${c.numero}`} back={{ href: `/compras/${id}`, label: 'Volver a la compra' }} actions={<EstadoBadge estado={c.estado} />} />
+        <Note tone="warn">{c.estado === 'anulada' ? 'Esta orden está anulada.' : AVISO_OC}</Note>
+      </>
+    )
+  }
 
   return (
     <>

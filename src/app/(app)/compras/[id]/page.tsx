@@ -8,6 +8,7 @@ import { etiquetaNegocio } from '@/lib/empresa'
 import { fmtDate, fmtPct, fmtQty, fmtSoles, hoyLima } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, Stat, Note, LinkButton } from '@/components/ui'
+import { ocCompleta, imprimeOC, AVISO_OC } from '@/lib/orden-compra'
 import { carpetaDeCompra, type Contable, type DocCarpeta, type TipoDocCarpeta } from '@/lib/carpeta'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
@@ -133,7 +134,10 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
         description={<><b className="text-ink-900">{negocio ? etiquetaNegocio(negocio) : c.local_codigo}</b> · {c.proveedor ?? 'Sin proveedor'} · {c.ciudad ?? 'origen no indicado'} · {fmtDate(c.fecha)}{req && <> · Requerimiento <Link className="enlace" href={`/requerimientos/${req.id}`}>{req.numero}</Link></>}</>}
         actions={<>
           <EstadoBadge estado={c.estado} />
-          <LinkButton href={`/compras/${id}/orden`} variant="outline" size="sm"><Printer className="size-3.5" /> Imprimir OC</LinkButton>
+          {/* la OC: solo Logística y Contabilidad, y solo completa (con proveedor y precios) */}
+          {imprimeOC(panel) && (ocCompleta({ sin_orden: c.sin_orden, estado: c.estado, proveedor: c.proveedor, total: Number(c.total ?? 0) })
+            ? <LinkButton href={`/compras/${id}/orden`} variant="outline" size="sm"><Printer className="size-3.5" /> Imprimir OC</LinkButton>
+            : !c.sin_orden && c.estado !== 'anulada' && <span className="max-w-64 text-xs text-muted">{AVISO_OC}</span>)}
           {logistica && c.estado === 'borrador' && (
             <ActionForm action={aprobarCompra}><input type="hidden" name="id" value={id} /><SubmitButton variant="dark" size="sm">Aprobar compra</SubmitButton></ActionForm>
           )}
