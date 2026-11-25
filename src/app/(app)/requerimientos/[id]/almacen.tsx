@@ -29,12 +29,10 @@ type R = { id: string; numero: string; estado: string; parcial: boolean; almacen
  * «Comprado» eligiendo el proveedor, sin precios. La llegada (cantidades reales, precio y boleta) la registra
  * el almacén en Entradas; ahí se cierra, completo o parcial.
  */
-export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, negocio, whatsapp }: {
+export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, negocio }: {
   r: R; det: DetAlm[]; compras: CompraAlm[]; cots: { id: string; numero: string; estado: string }[]
   /** el negocio del requerimiento (logo, razón social y RUC en la imagen y en la hoja impresa) */
   negocio: { codigo: string; nombre: string; razon_social: string; ruc: string } | null
-  /** número de WhatsApp (solo dígitos) al que se envía la imagen del requerimiento aprobado */
-  whatsapp: string
   gestiona: boolean; esAlmacen: boolean
 }) {
   const vigentes = compras.filter((c) => c.estado !== 'anulada')
@@ -70,7 +68,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
           {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : <EstadoBadge estado={r.estado} />}
           {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
           {gestiona && ['aprobado', 'comprado'].includes(r.estado) && <>
-            <EnviarWhatsApp numero={whatsapp} titulo={`Requerimiento ${r.numero}`}
+            <EnviarWhatsApp titulo={`Requerimiento ${r.numero}`}
               detalle={`${r.almacen_nombre ?? 'Almacén'}${r.aprobado_at ? ` · aprobado el ${fmtDate(r.aprobado_at, true)}` : ''}`}
               empresa={negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'} ruc={negocio?.ruc ?? '—'} logo={logo}
               filas={aprobadas.map((d) => ({ codigo: String(codigo(d)), producto: d.descripcion, cantidad: aprobadoTxt(d) }))} observacion={r.observacion} />

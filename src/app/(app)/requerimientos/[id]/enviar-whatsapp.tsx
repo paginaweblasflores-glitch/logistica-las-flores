@@ -1,14 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { useState, useSyncExternalStore } from 'react'
+import { ImageDown, MessageCircle } from 'lucide-react'
 import { btnClass } from '@/components/ui'
 
 export type FilaImagen = { codigo: string; producto: string; cantidad: string }
 
 type Datos = {
-  /** solo dígitos, con el código del país (51…) */
-  numero: string
   titulo: string
   /** «Almacén 01 — Hotel Umaru · aprobado el …» */
   detalle: string
@@ -105,35 +103,40 @@ async function dibujar(d: Datos): Promise<Blob> {
   return new Promise((ok, mal) => canvas.toBlob((b) => (b ? ok(b) : mal(new Error('No se pudo crear la imagen'))), 'image/png'))
 }
 
+// celular (pantalla táctil) o computadora; en el servidor se asume computadora
+const TACTIL = '(pointer: coarse)'
+const suscribir = (cb: () => void) => { const m = window.matchMedia(TACTIL); m.addEventListener('change', cb); return () => m.removeEventListener('change', cb) }
+
 /**
- * «Enviar por WhatsApp» (requerimiento del almacén aprobado). En el celular abre el menú de compartir con la
- * imagen lista (se elige WhatsApp y el contacto). En la computadora copia la imagen, la descarga y abre el chat
- * del número de Configuración: ahí se pega con Ctrl+V. WhatsApp no deja adjuntar una imagen desde un enlace.
+ * Imagen del requerimiento del almacén aprobado. En el celular: «Enviar por WhatsApp» abre el menú de compartir
+ * con la imagen lista (se elige WhatsApp y el contacto). En la computadora: «Descargar imagen», nada más.
  */
 export function EnviarWhatsApp(d: Datos) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  const celular = useSyncExternalStore(suscribir, () => window.matchMedia(TACTIL).matches, () => false)
   const texto = `${d.titulo} aprobado · ${d.detalle}`
+
+  const descargar = (blob: Blob, nombre: string) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = nombre; a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
 
   async function enviar() {
     setOcupado(true); setAviso(null)
     try {
       const blob = await dibujar(d)
       const archivo = new File([blob], `${d.titulo.replace(/\s+/g, '_')}.png`, { type: 'image/png' })
-      const celular = window.matchMedia('(pointer: coarse)').matches
-      if (celular && navigator.canShare?.({ files: [archivo] })) {
+      if (!celular) return descargar(blob, archivo.name)
+      // celular: el menú de compartir; si el navegador no lo permite, se descarga
+      if (navigator.canShare?.({ files: [archivo] })) {
         try { await navigator.share({ files: [archivo], text: texto }) } catch { /* cerró el menú de compartir */ }
-        return
+      } else {
+        descargar(blob, archivo.name)
+        setAviso('Este navegador no permite compartir: la imagen se descargó.')
       }
-      // computadora: copiar + descargar la imagen y abrir el chat
-      let copiada = false
-      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); copiada = true } catch { /* sin permiso para copiar */ }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = archivo.name; a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      if (d.numero) window.open(`https://wa.me/${d.numero}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
-      setAviso(copiada ? 'Imagen copiada y descargada: en el chat de WhatsApp pulse Ctrl+V y Enviar.' : 'Imagen descargada: arrástrela al chat de WhatsApp.')
     } catch (e) {
       setAviso(e instanceof Error ? e.message : 'No se pudo crear la imagen.')
     } finally { setOcupado(false) }
@@ -142,8 +145,9 @@ export function EnviarWhatsApp(d: Datos) {
   return (
     <span className="relative inline-flex">
       <button type="button" onClick={enviar} disabled={ocupado} className={btnClass('outline')}
-        title={d.numero ? `Enviar la imagen del requerimiento al WhatsApp +${d.numero}` : 'Compartir la imagen del requerimiento'}>
-        <MessageCircle className="size-4" /> {ocupado ? 'Preparando…' : 'Enviar por WhatsApp'}
+        title={celular ? 'Compartir la imagen del requerimiento por WhatsApp' : 'Descargar la imagen del requerimiento'}>
+        {celular ? <MessageCircle className="size-4" /> : <ImageDown className="size-4" />}
+        {ocupado ? 'Preparando…' : celular ? 'Enviar por WhatsApp' : 'Descargar imagen'}
       </button>
       {aviso && <span role="status" className="absolute top-full right-0 z-10 mt-2 w-72 rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink-700 shadow-lg">{aviso}</span>}
     </span>

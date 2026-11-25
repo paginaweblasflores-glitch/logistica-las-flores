@@ -27,15 +27,13 @@ export default async function RequerimientoPage({ params }: {
   const { id } = await params
   const supabase = await createClient()
   // todo al mismo tiempo (incluida la sesión)
-  const [{ data: r }, { data: det }, { data: compras }, { data: cots }, { data: aps }, usuario, locales, { data: wsp }] = await Promise.all([
+  const [{ data: r }, { data: det }, { data: compras }, { data: cots }, { data: aps }, usuario, locales] = await Promise.all([
     supabase.from('v_requerimiento_resumen').select('*').eq('id', id).maybeSingle(),
     supabase.from('requerimiento_detalle').select('id, producto_id, descripcion, imagen, marca, area_destino, stock_actual, cantidad_solicitada, cantidad_aprobada, precio_estimado, motivo, cantidad_pedida, pedida:unidad_pedido_id(nombre), producto:producto_id(codigo, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo))').eq('requerimiento_id', id),
     supabase.from('compra').select('id, numero, estado, fecha, tipo_documento, numero_documento, proveedor:proveedor_id(razon_social, ruc), compra_detalle(id, producto_id, agregado, descripcion, unidad_texto, cantidad_solicitada, cantidad_recibida, precio_unitario, producto:producto_id(nombre, unidad:unidad_id(codigo)))').eq('requerimiento_id', id).order('fecha'),
     supabase.from('cotizacion').select('id, numero, estado').eq('requerimiento_id', id),
     supabase.from('requerimiento_aprobador').select('id, nombre, cargo, monto_hasta').eq('activo', true).order('orden'),
     getUsuario(), getLocales(),
-    // el WhatsApp al que Logística envía el requerimiento del almacén aprobado (Configuración)
-    supabase.from('parametro').select('valor_texto').eq('clave', 'whatsapp_requerimientos').maybeSingle(),
   ])
   if (!r) notFound()
   // el negocio (con su RUC y razón social) ya viene con la sesión
@@ -44,8 +42,7 @@ export default async function RequerimientoPage({ params }: {
   if (r.origen === 'almacen') {
     return <RequerimientoAlmacen r={r} det={(det ?? []) as unknown as DetAlm[]} compras={(compras ?? []) as unknown as CompraAlm[]}
       cots={cots ?? []} gestiona={panelDe(usuario.rol) === 'logistica'} esAlmacen={panelDe(usuario.rol) === 'almacen'}
-      negocio={loc ? { codigo: loc.codigo, nombre: loc.nombre, razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : null}
-      whatsapp={String(wsp?.valor_texto ?? '').replace(/\D/g, '')} />
+      negocio={loc ? { codigo: loc.codigo, nombre: loc.nombre, razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : null} />
   }
   const empresa = loc ? { razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : undefined
   type D = { id: string; producto_id: string | null; descripcion: string; imagen: string | null; marca: string | null; area_destino: string | null; stock_actual: number | null
