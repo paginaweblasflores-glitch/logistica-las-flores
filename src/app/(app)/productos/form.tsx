@@ -44,7 +44,8 @@ export function ProductoForm({ p = {}, categorias, unidades, negocios, seleccion
     const u = unidades.find((x) => x.id === unidadId)
     return u ? { nombre: u.nombre, tipo: u.tipo ?? 'medida' } : null
   })
-  const medidas = unidades.filter((u) => (u.tipo ?? 'medida') === 'medida')
+  // unidad en que se cuenta: las de medida y también «Paquete» (se compra y se despacha por paquetes)
+  const medidas = unidades.filter((u) => (u.tipo ?? 'medida') === 'medida' || u.nombre === 'Paquete')
   const empaques = unidades.filter((u) => u.tipo === 'empaque')
   const [pres, setPres] = useState<string | null>(() => empaques.find((x) => x.id === p.presentacion_id)?.nombre ?? null)
   // alta: la cantidad inicial se escribe en la unidad chica o en la presentación
