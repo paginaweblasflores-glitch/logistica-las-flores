@@ -13,8 +13,19 @@ import { ExportButton } from '@/components/export-button'
 type Linea = { movimiento_id: string; numero: number; fecha: string; tipo: string; tipo_nombre: string; almacen_nombre: string; documento: string | null
   observacion: string | null; motivo_nombre: string | null; producto_nombre: string; unidad: string; entrada: number | null; salida: number | null; importe: number }
 
-const COLS = { numero: 'N° mov.', fecha: 'Fecha', tipo_nombre: 'Tipo', almacen_nombre: 'Almacén', producto_nombre: 'Producto', unidad: 'Unidad',
-  entrada: 'Entrada', salida: 'Salida', costo_unitario: 'Costo', importe: 'Importe', documento: 'Documento', motivo_nombre: 'Motivo', observacion: 'Observación' }
+/** «Movimientos (Kardex)»: cada movimiento con el stock que quedó después (saldo del producto en su almacén) */
+const COLS = { nro: 'N° mov.', fecha: 'Fecha', tipo_nombre: 'Tipo', almacen_nombre: 'Almacén', producto_nombre: 'Producto', unidad: 'Unidad',
+  entrada: 'Entrada', salida: 'Salida', saldo: 'Stock después', costo_unitario: 'Costo', importe: 'Importe', documento: 'Documento', motivo_nombre: 'Motivo', observacion: 'Observación' }
+
+/** Una descarga del recuadro «Descargar en Excel»: qué responde y su botón */
+function Descarga({ titulo, texto, children }: { titulo: string; texto: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col justify-between gap-3 rounded-lg border border-line p-3">
+      <div><p className="text-sm font-semibold">{titulo}</p><p className="text-xs text-muted">{texto}</p></div>
+      {children}
+    </div>
+  )
+}
 
 /** Reportes del panel de almacén: qué entró, qué salió, qué se traspasó y qué productos son nuevos en el rango. */
 export async function ReportesAlmacen({ local, params }: { local: Local; params: Record<string, string> }) {
@@ -62,18 +73,40 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
 
   return (
     <>
-      <PageHeader title={`Reportes${sel.actual ? ` · ${sel.actual.corto}` : ''}`}
-        actions={
-          // el cuadro que pide el Sr. Vladimir: cada compra con su fecha, comprobante, marca, cantidad, precio y total
-          <ExportButton label="Excel de compras" filename={`compras_${desde}_${hasta}`} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
-            filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local.id : undefined, fuera_de_catalogo: 'false' }}
-            columns={{ fecha_ingreso: 'Fecha de entrada', almacen: 'Almacén', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
-              codigo_almacen: 'Cód.', producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unitario', total: 'Total' }} />
-        } />
+      <PageHeader title={`Reportes${sel.actual ? ` · ${sel.actual.corto}` : ''}`} />
       <FilterBar>
         <input type="hidden" name="ver" value={ver} />
         <FiltroFechas desde={desde} hasta={hasta} />
       </FilterBar>
+
+      {/* cada descarga responde una pregunta distinta (almacén elegido arriba y fechas del filtro) */}
+      <Section title="Descargar en Excel" className="mb-5">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Descarga titulo="Stock actual" texto="La cantidad exacta de cada producto hoy, como en Inventario (una fila por producto).">
+            <ExportButton label="Stock actual" filename={`stock_${local.codigo}_${hoy}`} rpc={{ fn: 'fn_reporte_stock', args: { p_local: local.id, p_almacen: sel.id } }}
+              columns={{ almacen: 'Almacén', codigo: 'Cód.', producto: 'Producto', zona: 'Zona', categoria: 'Categoría', unidad: 'Unidad', stock: 'Stock',
+                en_presentacion: 'En presentación grande', costo_promedio: 'Costo promedio', valor: 'Valor', minimo: 'Mínimo', estado: 'Estado' }} />
+          </Descarga>
+          <Descarga titulo="Resumen del periodo" texto="Por producto: stock al inicio + entradas − salidas = stock al final.">
+            <ExportButton label="Resumen del periodo" filename={`resumen_${local.codigo}_${desde}_${hasta}`}
+              rpc={{ fn: 'fn_reporte_resumen', args: { p_local: local.id, p_almacen: sel.id, p_desde: desde, p_hasta: hasta } }}
+              columns={{ almacen: 'Almacén', codigo: 'Cód.', producto: 'Producto', categoria: 'Categoría', unidad: 'Unidad', stock_inicio: 'Stock al inicio',
+                entradas: 'Entradas', salidas: 'Salidas', stock_final: 'Stock al final', costo_promedio: 'Costo promedio', valor_final: 'Valor final' }} />
+          </Descarga>
+          <Descarga titulo="Movimientos (Kardex)" texto="Cada entrada y salida, una por una, con el stock que quedó después de cada una.">
+            <ExportButton label="Movimientos" filename={`movimientos_${local.codigo}_${desde}_${hasta}`} table="v_kardex" columns={COLS}
+              dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
+              filters={{ local_id: local.id, almacen_id: sel.id ?? undefined }} />
+          </Descarga>
+          <Descarga titulo="Compras del periodo" texto="Qué se compró, a quién, con qué comprobante y a qué precio.">
+            {/* el cuadro que pide el Sr. Vladimir: cada compra con su fecha, comprobante, marca, cantidad, precio y total */}
+            <ExportButton label="Compras" filename={`compras_${desde}_${hasta}`} table="v_ingreso_almacen" dateColumn="fecha_ingreso" desde={desde} hasta={hasta} order="fecha_ingreso"
+              filters={{ almacen_id: sel.id ?? undefined, local_id: !sel.id ? local.id : undefined, fuera_de_catalogo: 'false' }}
+              columns={{ fecha_ingreso: 'Fecha de entrada', almacen: 'Almacén', proveedor: 'Proveedor', tipo_documento: 'Comprobante', numero_documento: 'N° comprobante',
+                codigo_almacen: 'Cód.', producto: 'Producto', marca: 'Marca', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unitario', total: 'Total' }} />
+          </Descarga>
+        </div>
+      </Section>
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {tarjetas.map((t) => {
@@ -89,11 +122,7 @@ export async function ReportesAlmacen({ local, params }: { local: Local; params:
         })}
       </div>
 
-      <Section title={`Detalle: ${actual.titulo}`} bodyClassName="p-0"
-        actions={detalle ? <ExportButton label="Excel del detalle" filename={`almacen_${local.codigo}_${actual.id}_${desde}_${hasta}`} table="v_movimiento_linea" columns={COLS}
-          dateColumn="fecha" desde={desde} hasta={hasta} order="fecha"
-          // lo mismo que la tarjeta: el almacén elegido (o todos los del negocio) y los tipos de esa tarjeta
-          filters={{ local_id: local.id, almacen_id: sel.id ?? undefined, tipo: TIPOS[actual.id as keyof typeof TIPOS] }} /> : undefined}>
+      <Section title={`Detalle: ${actual.titulo}`} bodyClassName="p-0">
         {detalle ? (
           detalle.length ? (
             <PagedTable head={<tr><Th>Fecha</Th><Th>Tipo</Th><Th>Producto</Th><Th right>Cantidad</Th><Th right>Importe</Th><Th>Documento / motivo</Th></tr>}>

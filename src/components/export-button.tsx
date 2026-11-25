@@ -11,14 +11,16 @@ import { inicioDiaLima, finDiaLima } from '@/lib/format'
  * Exporta una vista/tabla a Excel (.xlsx) respetando filtros de igualdad y rango de fechas.
  * Descarga en páginas de 1 000 filas para soportar grandes volúmenes.
  */
-export function ExportButton({ filename, table, columns, filters = {}, dateColumn, desde, hasta, order, desc = false, pie, label = 'Excel' }: {
+export function ExportButton({ filename, table, rpc, columns, filters = {}, dateColumn, desde, hasta, order, desc = false, pie, label = 'Excel' }: {
+  /** en lugar de una vista: una función de la base que ya devuelve las filas armadas (reportes con cálculos) */
+  rpc?: { fn: string; args: Record<string, unknown> }
   /** lo más reciente primero (como en pantalla) */
   desc?: boolean
   /** filas de resumen al final, separadas por una fila vacía (p. ej. [['Stock total', '5 sacos']]) */
   pie?: [string, string | number][]
   label?: string
   filename: string
-  table: string
+  table?: string
   columns: Record<string, string>
   /** un valor: igual a; una lista: cualquiera de esos valores */
   filters?: Record<string, string | string[] | null | undefined>
@@ -34,7 +36,12 @@ export function ExportButton({ filename, table, columns, filters = {}, dateColum
     try {
       const supabase = createClient()
       const rows: Record<string, unknown>[] = []
-      for (let from = 0; ; from += 1000) {
+      if (rpc) {
+        const { data, error } = await supabase.rpc(rpc.fn, rpc.args)
+        if (error) throw error
+        rows.push(...((data ?? []) as Record<string, unknown>[]))
+      }
+      for (let from = 0; !rpc && table; from += 1000) {
         let q = supabase.from(table).select(Object.keys(columns).join(','))
         for (const [k, v] of Object.entries(filters)) {
           if (Array.isArray(v)) q = q.in(k, v)
