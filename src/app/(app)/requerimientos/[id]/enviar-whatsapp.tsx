@@ -6,7 +6,7 @@ import { btnClass } from '@/components/ui'
 import { useSeleccion, type FilaDoc } from './seleccion'
 
 type Datos = {
-  /** número interno (RA-UM-2026-0001): va en pequeño, solo para ubicarlo después */
+  /** número interno (RA-UM-2026-0001): solo en el nombre del archivo, no en la imagen */
   referencia: string
   empresa: string
   ruc: string
@@ -60,15 +60,14 @@ async function dibujar(d: Datos): Promise<Blob> {
   ctx.fillStyle = MARCA; ctx.fillRect(0, 0, W, 10)
   ctx.textBaseline = 'alphabetic'
 
-  // encabezado: logo + empresa a la izquierda, «PEDIDO» a la derecha (el número interno en pequeño)
+  // encabezado: logo + empresa a la izquierda, «PEDIDO» a la derecha
   const logo = await cargarLogo(d.logo)
   let x = P
   if (logo) { const h = 96, w = Math.min(220, (logo.width / logo.height) * h); ctx.drawImage(logo, P, 44, w, h); x = P + w + 24 }
   ctx.fillStyle = TINTA; ctx.font = `bold 26px ${FUENTE}`; ctx.fillText(d.empresa, x, 84)
   ctx.fillStyle = GRIS; ctx.font = `22px ${FUENTE}`; ctx.fillText(`RUC ${d.ruc}`, x, 118)
   ctx.textAlign = 'right'
-  ctx.fillStyle = TINTA; ctx.font = `bold 40px ${FUENTE}`; ctx.fillText('PEDIDO', W - P, 92)
-  ctx.fillStyle = GRIS; ctx.font = `18px ${FUENTE}`; ctx.fillText(`Ref. ${d.referencia}`, W - P, 124)
+  ctx.fillStyle = TINTA; ctx.font = `bold 40px ${FUENTE}`; ctx.fillText('PEDIDO', W - P, 108)
   ctx.textAlign = 'left'
   ctx.fillStyle = TINTA; ctx.fillRect(P, 160, W - 2 * P, 3)
   ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(`Fecha: ${fecha}`, P, 204)

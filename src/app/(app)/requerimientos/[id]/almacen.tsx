@@ -158,7 +158,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
         <header className="mb-4 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-3">
           <div className="flex items-center gap-3"><Image src={logo} alt="" width={120} height={52} className="h-12 w-auto object-contain" />
             <div><p className="font-bold">{empresa}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p></div></div>
-          <div className="text-right"><p className="text-xl font-bold">PEDIDO</p><p className="text-[10px] text-muted">Ref. {r.numero}</p></div>
+          <p className="text-xl font-bold">PEDIDO</p>
         </header>
         <p className="mb-3 text-sm">Fecha: {fmtDate(hoyLima())}</p>
         <table className="w-full text-sm">
