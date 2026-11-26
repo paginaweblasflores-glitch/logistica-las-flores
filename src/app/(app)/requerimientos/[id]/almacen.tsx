@@ -2,7 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { PackageCheck, Printer } from 'lucide-react'
 import { ocCompleta, totalOrden } from '@/lib/orden-compra'
-import { fmtDate, fmtQty, fmtSoles, ahoraLima } from '@/lib/format'
+import { fmtDate, fmtQty, fmtSoles, ahoraLima, hoyLima } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
@@ -61,7 +61,8 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
   const aprobadoTxt = (d: DetAlm) => { const a = Number(d.cantidad_aprobada ?? d.cantidad_solicitada); return enPedido(d) ? `${fmtQty(a / factor(d))} ${unidadPedido(d)}` : `${fmtQty(a)} ${d.producto?.unidad.codigo ?? ''}` }
   // aprobado: Logística marca qué productos pide a cada proveedor (la imagen y la hoja salen con lo marcado)
   const marcar = gestiona && ['aprobado', 'comprado'].includes(r.estado)
-  const filasDoc = aprobadas.map((d) => ({ id: d.id, codigo: String(codigo(d)), producto: d.descripcion, cantidad: aprobadoTxt(d) }))
+  const filasDoc = aprobadas.map((d) => ({ id: d.id, producto: d.descripcion, cantidad: aprobadoTxt(d) }))
+  const empresa = negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'
 
   const contenido = (
     <>
@@ -72,10 +73,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
           {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
           {/* solo con los productos marcados en la tabla (lo que va a cada proveedor) */}
           {marcar && <>
-            <EnviarWhatsApp titulo={`Requerimiento ${r.numero}`}
-              detalle={`${r.almacen_nombre ?? 'Almacén'}${r.aprobado_at ? ` · aprobado el ${fmtDate(r.aprobado_at, true)}` : ''}`}
-              empresa={negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'} ruc={negocio?.ruc ?? '—'} logo={logo}
-              filas={filasDoc} observacion={r.observacion} />
+            <EnviarWhatsApp referencia={r.numero} empresa={empresa} ruc={negocio?.ruc ?? '—'} logo={logo} filas={filasDoc} />
             <ImprimirMarcados />
           </>}
           {porComprar && (
@@ -155,20 +153,18 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
         )}
       </Section>
 
-      {/* hoja para imprimir (PDF): lo aprobado, para ir a comprar */}
+      {/* hoja para imprimir (PDF): el pedido para el proveedor, igual que la imagen (sin datos internos) */}
       <section className="documento print-area hidden print:block">
         <header className="mb-4 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-3">
           <div className="flex items-center gap-3"><Image src={logo} alt="" width={120} height={52} className="h-12 w-auto object-contain" />
-            <div><p className="font-bold">{negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p></div></div>
-          <div className="text-right"><p className="font-bold">Requerimiento {r.numero}</p>
-            <p className="text-xs">{r.almacen_nombre} · pedido el {fmtDate(r.created_at, true)}</p>
-            {r.aprobado_at && <p className="text-xs">Aprobado el {fmtDate(r.aprobado_at, true)}</p>}</div>
+            <div><p className="font-bold">{empresa}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p></div></div>
+          <div className="text-right"><p className="text-xl font-bold">PEDIDO</p><p className="text-[10px] text-muted">Ref. {r.numero}</p></div>
         </header>
+        <p className="mb-3 text-sm">Fecha: {fmtDate(hoyLima())}</p>
         <table className="w-full text-sm">
-          <thead><tr><th className="th text-left">Ítem</th><th className="th text-right">Cód.</th><th className="th text-left">Producto</th><th className="th text-right">Cantidad</th></tr></thead>
+          <thead><tr><th className="th w-12 text-left">N°</th><th className="th text-left">Producto</th><th className="th text-right">Cantidad</th></tr></thead>
           <FilasImpresion filas={filasDoc} />
         </table>
-        {r.observacion && <p className="mt-3 text-xs">Observación: {r.observacion}</p>}
       </section>
     </>
   )

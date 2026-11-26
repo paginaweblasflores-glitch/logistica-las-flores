@@ -6,14 +6,12 @@ import { btnClass } from '@/components/ui'
 import { useSeleccion, type FilaDoc } from './seleccion'
 
 type Datos = {
-  titulo: string
-  /** «Almacén 01 — Hotel Umaru · aprobado el …» */
-  detalle: string
+  /** número interno (RA-UM-2026-0001): va en pequeño, solo para ubicarlo después */
+  referencia: string
   empresa: string
   ruc: string
   logo: string
   filas: FilaDoc[]
-  observacion?: string | null
 }
 
 const W = 1080, P = 56
@@ -41,16 +39,19 @@ async function cargarLogo(src: string) {
   } catch { return null }
 }
 
-/** La imagen del requerimiento (PNG): encabezado del negocio y la tabla de lo aprobado. */
+/**
+ * La imagen del pedido para el proveedor (PNG): quién pide (logo, razón social, RUC), la fecha y lo que debe
+ * traer (N°, producto, cantidad). Sin datos internos: ni códigos, ni almacén, ni observaciones.
+ */
 async function dibujar(d: Datos): Promise<Blob> {
   const medir = document.createElement('canvas').getContext('2d')!
-  // columnas: N° · Cód. · Producto · Cantidad
-  const cN = P, cCod = P + 70, cProd = P + 190, cCantFin = W - P, anchoProd = W - P - 230 - cProd
+  // columnas: N° · Producto · Cantidad
+  const cN = P, cProd = P + 90, cCantFin = W - P, anchoProd = W - P - 230 - cProd
   medir.font = `26px ${FUENTE}`
   const filas = d.filas.map((f) => ({ ...f, lineas: partir(medir, f.producto, anchoProd) }))
   const altoFila = (n: number) => n * 34 + 26
-  const obs = d.observacion ? partir(medir, `Observación: ${d.observacion}`, W - 2 * P) : []
-  const alto = 230 + 64 + filas.reduce((s, f) => s + altoFila(f.lineas.length), 0) + (obs.length ? obs.length * 34 + 30 : 0) + 110
+  const alto = 230 + 64 + filas.reduce((s, f) => s + altoFila(f.lineas.length), 0) + 110
+  const fecha = new Date().toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' })
 
   const canvas = document.createElement('canvas')
   canvas.width = W; canvas.height = alto
@@ -59,30 +60,29 @@ async function dibujar(d: Datos): Promise<Blob> {
   ctx.fillStyle = MARCA; ctx.fillRect(0, 0, W, 10)
   ctx.textBaseline = 'alphabetic'
 
-  // encabezado: logo + empresa a la izquierda, número a la derecha
+  // encabezado: logo + empresa a la izquierda, «PEDIDO» a la derecha (el número interno en pequeño)
   const logo = await cargarLogo(d.logo)
   let x = P
   if (logo) { const h = 96, w = Math.min(220, (logo.width / logo.height) * h); ctx.drawImage(logo, P, 44, w, h); x = P + w + 24 }
   ctx.fillStyle = TINTA; ctx.font = `bold 26px ${FUENTE}`; ctx.fillText(d.empresa, x, 84)
   ctx.fillStyle = GRIS; ctx.font = `22px ${FUENTE}`; ctx.fillText(`RUC ${d.ruc}`, x, 118)
   ctx.textAlign = 'right'
-  ctx.fillStyle = GRIS; ctx.font = `bold 20px ${FUENTE}`; ctx.fillText('REQUERIMIENTO APROBADO', W - P, 78)
-  ctx.fillStyle = TINTA; ctx.font = `bold 34px ${FUENTE}`; ctx.fillText(d.titulo, W - P, 120)
+  ctx.fillStyle = TINTA; ctx.font = `bold 40px ${FUENTE}`; ctx.fillText('PEDIDO', W - P, 92)
+  ctx.fillStyle = GRIS; ctx.font = `18px ${FUENTE}`; ctx.fillText(`Ref. ${d.referencia}`, W - P, 124)
   ctx.textAlign = 'left'
   ctx.fillStyle = TINTA; ctx.fillRect(P, 160, W - 2 * P, 3)
-  ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(d.detalle, P, 204)
+  ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(`Fecha: ${fecha}`, P, 204)
 
   // tabla
   let y = 230
   ctx.fillStyle = FONDO; ctx.fillRect(P, y, W - 2 * P, 56)
   ctx.fillStyle = TINTA; ctx.font = `bold 22px ${FUENTE}`
-  ctx.fillText('N°', cN + 12, y + 36); ctx.fillText('Cód.', cCod, y + 36); ctx.fillText('Producto', cProd, y + 36)
+  ctx.fillText('N°', cN + 12, y + 36); ctx.fillText('Producto', cProd, y + 36)
   ctx.textAlign = 'right'; ctx.fillText('Cantidad', cCantFin - 12, y + 36); ctx.textAlign = 'left'
   y += 56
   filas.forEach((f, i) => {
     const h = altoFila(f.lineas.length)
     ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(String(i + 1), cN + 12, y + 44)
-    ctx.font = `bold 22px ui-monospace, Consolas, monospace`; ctx.fillText(f.codigo, cCod, y + 44)
     ctx.fillStyle = TINTA; ctx.font = `26px ${FUENTE}`
     f.lineas.forEach((l, j) => ctx.fillText(l, cProd, y + 44 + j * 34))
     ctx.textAlign = 'right'; ctx.font = `bold 26px ${FUENTE}`; ctx.fillText(f.cantidad, cCantFin - 12, y + 44); ctx.textAlign = 'left'
@@ -90,14 +90,8 @@ async function dibujar(d: Datos): Promise<Blob> {
     ctx.fillStyle = LINEA; ctx.fillRect(P, y - 1, W - 2 * P, 2)
   })
 
-  if (obs.length) {
-    y += 46
-    ctx.fillStyle = TINTA; ctx.font = `26px ${FUENTE}`
-    obs.forEach((l, j) => ctx.fillText(l, P, y + j * 34))
-    y += (obs.length - 1) * 34
-  }
   ctx.fillStyle = GRIS; ctx.font = `20px ${FUENTE}`
-  ctx.fillText(`${d.filas.length} producto${d.filas.length === 1 ? '' : 's'} · Sistema de Logística · Corporación Las Flores`, P, alto - 44)
+  ctx.fillText(`${d.filas.length} producto${d.filas.length === 1 ? '' : 's'}`, P, alto - 44)
 
   return new Promise((ok, mal) => canvas.toBlob((b) => (b ? ok(b) : mal(new Error('No se pudo crear la imagen'))), 'image/png'))
 }
@@ -114,7 +108,7 @@ export function EnviarWhatsApp(d: Datos) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const celular = useSyncExternalStore(suscribir, () => window.matchMedia(TACTIL).matches, () => false)
-  const texto = `${d.titulo} aprobado · ${d.detalle}`
+  const texto = `Pedido · ${d.empresa}`
   // solo lo marcado en la tabla (lo que va a este proveedor); cada clic arma una imagen nueva
   const sel = useSeleccion()
   const filas = sel ? d.filas.filter((f) => sel.marcados.has(f.id)) : d.filas
@@ -130,7 +124,7 @@ export function EnviarWhatsApp(d: Datos) {
     setOcupado(true); setAviso(null)
     try {
       const blob = await dibujar({ ...d, filas })
-      const archivo = new File([blob], `${d.titulo.replace(/\s+/g, '_')}.png`, { type: 'image/png' })
+      const archivo = new File([blob], `Pedido_${d.referencia}.png`, { type: 'image/png' })
       if (!celular) return descargar(blob, archivo.name)
       // celular: el menú de compartir; si el navegador no lo permite, se descarga
       if (navigator.canShare?.({ files: [archivo] })) {

@@ -47,12 +47,12 @@ export function ImprimirMarcados() {
   )
 }
 
-export type FilaDoc = { id: string; codigo: string; producto: string; cantidad: string }
+export type FilaDoc = { id: string; producto: string; cantidad: string }
 
 /** filas de la hoja impresa: solo lo marcado */
 export function FilasImpresion({ filas }: { filas: FilaDoc[] }) {
   const s = useSeleccion()
   return <tbody>{filas.filter((f) => !s || s.marcados.has(f.id)).map((f, i) => (
-    <tr key={f.id}><td className="td">{i + 1}</td><td className="td text-right font-mono">{f.codigo}</td><td className="td">{f.producto}</td><td className="td text-right">{f.cantidad}</td></tr>
+    <tr key={f.id}><td className="td">{i + 1}</td><td className="td">{f.producto}</td><td className="td text-right">{f.cantidad}</td></tr>
   ))}</tbody>
 }
