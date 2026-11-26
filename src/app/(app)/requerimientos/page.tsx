@@ -24,8 +24,9 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   const { from, to } = paginar(params)
   const estado = sp(params, 'estado')
   // Dos requerimientos que no se mezclan: el de los jefes de área y el del almacén (su lista para reponer stock).
-  // El almacén ve solo los suyos; el jefe de área, los de áreas; Logística, cada uno en su pestaña.
-  const origen = panel === 'almacen' ? 'almacen' : panel === 'area' ? 'area' : sp(params, 'origen', 'area') === 'almacen' ? 'almacen' : 'area'
+  // El almacén ve solo los suyos; el jefe de área, los de áreas; Logística, cada uno en su pestaña
+  // (primero y por defecto «Del almacén»: es el que más requerimientos hace).
+  const origen = panel === 'almacen' ? 'almacen' : panel === 'area' ? 'area' : sp(params, 'origen', 'almacen') === 'area' ? 'area' : 'almacen'
   const delAlmacen = origen === 'almacen'
 
   let q = supabase.from('v_requerimiento_resumen')
@@ -53,7 +54,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
     esLogistica ? porAprobar('almacen') : Promise.resolve({ count: 0 }),
   ])
   const puedeCrear = panel !== 'logistica' && !(panel === 'almacen' && soloConsulta(sel))
-  const tabs = [{ id: 'area', nombre: 'De áreas', n: nArea ?? 0 }, { id: 'almacen', nombre: 'Del almacén', n: nAlmacen ?? 0 }]
+  const tabs = [{ id: 'almacen', nombre: 'Del almacén', n: nAlmacen ?? 0 }, { id: 'area', nombre: 'De áreas', n: nArea ?? 0 }]
   const pct = kpi?.length ? kpi.filter((x) => x.dentro_objetivo).length / kpi.length : null
   // con un almacén elegido, la columna «Almacén» repetiría lo mismo en cada fila
   const colLugar = !(panel === 'almacen' && sel.id)

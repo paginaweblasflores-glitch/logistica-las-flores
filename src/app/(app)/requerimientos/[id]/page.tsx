@@ -76,7 +76,7 @@ export default async function RequerimientoPage({ params }: {
 
   return (
     <>
-      <PageHeader title={`Requerimiento ${r.numero}`} back={{ href: '/requerimientos', label: 'Requerimientos' }}
+      <PageHeader title={`Requerimiento ${r.numero}`} back={{ href: '/requerimientos?origen=area', label: 'Requerimientos' }}
         actions={<>
           <EstadoBadge estado={r.estado} />
           {/* antes de aprobar: la hoja para las firmas (Fernanda la lleva a la reunión); ya comprado: con el detalle de la compra */}
