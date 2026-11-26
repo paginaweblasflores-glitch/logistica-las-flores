@@ -6,9 +6,9 @@ import { fmtDate, fmtQty, fmtSoles, ahoraLima } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
-import { PrintButton } from '@/components/print-button'
 import { AprobacionAlmacen } from './aprobacion-almacen'
 import { EnviarWhatsApp } from './enviar-whatsapp'
+import { Seleccion, MarcaFila, MarcaTodas, ImprimirMarcados, FilasImpresion } from './seleccion'
 import { LOGO_DOC } from '@/lib/empresa'
 import { cotizarRequerimiento, comprarRequerimientoAlmacen } from '../actions'
 
@@ -59,20 +59,24 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
   const aprobadas = det.filter((d) => Number(d.cantidad_aprobada ?? d.cantidad_solicitada) > 0)
   const logo = LOGO_DOC[negocio?.codigo ?? 'LF'] ?? LOGO_DOC.LF
   const aprobadoTxt = (d: DetAlm) => { const a = Number(d.cantidad_aprobada ?? d.cantidad_solicitada); return enPedido(d) ? `${fmtQty(a / factor(d))} ${unidadPedido(d)}` : `${fmtQty(a)} ${d.producto?.unidad.codigo ?? ''}` }
+  // aprobado: Logística marca qué productos pide a cada proveedor (la imagen y la hoja salen con lo marcado)
+  const marcar = gestiona && ['aprobado', 'comprado'].includes(r.estado)
+  const filasDoc = aprobadas.map((d) => ({ id: d.id, codigo: String(codigo(d)), producto: d.descripcion, cantidad: aprobadoTxt(d) }))
 
-  return (
+  const contenido = (
     <>
       <PageHeader title={`Requerimiento ${r.numero}`} back={{ href: '/requerimientos', label: 'Requerimientos' }}
         description={`${r.almacen_nombre ?? 'Almacén'} · pedido el ${fmtDate(r.created_at, true)}${r.fecha_requerida ? ` · para el ${fmtDate(r.fecha_requerida)}` : ''}`}
         actions={<>
           {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : <EstadoBadge estado={r.estado} />}
           {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
-          {gestiona && ['aprobado', 'comprado'].includes(r.estado) && <>
+          {/* solo con los productos marcados en la tabla (lo que va a cada proveedor) */}
+          {marcar && <>
             <EnviarWhatsApp titulo={`Requerimiento ${r.numero}`}
               detalle={`${r.almacen_nombre ?? 'Almacén'}${r.aprobado_at ? ` · aprobado el ${fmtDate(r.aprobado_at, true)}` : ''}`}
               empresa={negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'} ruc={negocio?.ruc ?? '—'} logo={logo}
-              filas={aprobadas.map((d) => ({ codigo: String(codigo(d)), producto: d.descripcion, cantidad: aprobadoTxt(d) }))} observacion={r.observacion} />
-            <PrintButton label="Imprimir / PDF" />
+              filas={filasDoc} observacion={r.observacion} />
+            <ImprimirMarcados />
           </>}
           {porComprar && (
             <ActionForm action={cotizarRequerimiento}><input type="hidden" name="id" value={r.id} />
@@ -104,7 +108,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
             pedido: enPedido(d) ? Number(d.cantidad_pedida) : Number(d.cantidad_solicitada), unidad: unidadPedido(d), factor: factor(d), motivo: d.motivo }))} />
         ) : (
         <Table>
-          <thead><tr><Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th><Th right>Aprobado</Th>
+          <thead><tr>{marcar && <Th className="w-12 text-center"><MarcaTodas ids={aprobadas.map((d) => d.id)} /></Th>}<Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th><Th right>Aprobado</Th>
             {recibido && <><Th right>Llegó</Th><Th right>Precio (boleta)</Th></>}{conObs && <Th>Observación</Th>}</tr></thead>
           <tbody>
             {det.map((d) => {
@@ -113,6 +117,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
               const lleg = llego(d.producto_id)
               return (
                 <tr key={d.id} className={aprob === 0 ? 'text-muted line-through' : ''}>
+                  {marcar && <Td className="text-center">{aprob !== 0 && <MarcaFila id={d.id} nombre={d.descripcion} />}</Td>}
                   <Td right className="font-mono text-xs font-semibold">{codigo(d)}</Td>
                   <Td className="font-medium">{d.descripcion} <span className="text-xs text-muted">{d.producto?.unidad.codigo}</span></Td>
                   <Td right>{d.cantidad_pedida != null && d.pedida && Number(d.cantidad_pedida) !== Number(d.cantidad_solicitada)
@@ -129,6 +134,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
             })}
             {agregados.map((d) => (
               <tr key={d.id}>
+                {marcar && <Td />}
                 <Td right className="text-muted">—</Td>
                 <Td className="font-medium">{d.producto?.nombre} <Badge tone="violet" className="ml-1">No estaba en el requerimiento</Badge></Td>
                 <Td right>—</Td><Td right>—</Td>
@@ -160,12 +166,11 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
         </header>
         <table className="w-full text-sm">
           <thead><tr><th className="th text-left">Ítem</th><th className="th text-right">Cód.</th><th className="th text-left">Producto</th><th className="th text-right">Cantidad</th></tr></thead>
-          <tbody>{aprobadas.map((d, i) => (
-            <tr key={d.id}><td className="td">{i + 1}</td><td className="td text-right font-mono">{codigo(d)}</td><td className="td">{d.descripcion}</td><td className="td text-right">{aprobadoTxt(d)}</td></tr>
-          ))}</tbody>
+          <FilasImpresion filas={filasDoc} />
         </table>
         {r.observacion && <p className="mt-3 text-xs">Observación: {r.observacion}</p>}
       </section>
     </>
   )
+  return marcar ? <Seleccion>{contenido}</Seleccion> : contenido
 }

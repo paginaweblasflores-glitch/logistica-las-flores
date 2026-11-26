@@ -3,8 +3,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import { ImageDown, MessageCircle } from 'lucide-react'
 import { btnClass } from '@/components/ui'
-
-export type FilaImagen = { codigo: string; producto: string; cantidad: string }
+import { useSeleccion, type FilaDoc } from './seleccion'
 
 type Datos = {
   titulo: string
@@ -13,7 +12,7 @@ type Datos = {
   empresa: string
   ruc: string
   logo: string
-  filas: FilaImagen[]
+  filas: FilaDoc[]
   observacion?: string | null
 }
 
@@ -116,6 +115,9 @@ export function EnviarWhatsApp(d: Datos) {
   const [ocupado, setOcupado] = useState(false)
   const celular = useSyncExternalStore(suscribir, () => window.matchMedia(TACTIL).matches, () => false)
   const texto = `${d.titulo} aprobado · ${d.detalle}`
+  // solo lo marcado en la tabla (lo que va a este proveedor); cada clic arma una imagen nueva
+  const sel = useSeleccion()
+  const filas = sel ? d.filas.filter((f) => sel.marcados.has(f.id)) : d.filas
 
   const descargar = (blob: Blob, nombre: string) => {
     const url = URL.createObjectURL(blob)
@@ -127,7 +129,7 @@ export function EnviarWhatsApp(d: Datos) {
   async function enviar() {
     setOcupado(true); setAviso(null)
     try {
-      const blob = await dibujar(d)
+      const blob = await dibujar({ ...d, filas })
       const archivo = new File([blob], `${d.titulo.replace(/\s+/g, '_')}.png`, { type: 'image/png' })
       if (!celular) return descargar(blob, archivo.name)
       // celular: el menú de compartir; si el navegador no lo permite, se descarga
@@ -144,8 +146,8 @@ export function EnviarWhatsApp(d: Datos) {
 
   return (
     <span className="relative inline-flex">
-      <button type="button" onClick={enviar} disabled={ocupado} className={btnClass('outline')}
-        title={celular ? 'Compartir la imagen del requerimiento por WhatsApp' : 'Descargar la imagen del requerimiento'}>
+      <button type="button" onClick={enviar} disabled={ocupado || !filas.length} className={btnClass('outline')}
+        title={!filas.length ? 'Marque en la tabla los productos que va a pedir' : celular ? 'Compartir la imagen del requerimiento por WhatsApp' : 'Descargar la imagen del requerimiento'}>
         {celular ? <MessageCircle className="size-4" /> : <ImageDown className="size-4" />}
         {ocupado ? 'Preparando…' : celular ? 'Enviar por WhatsApp' : 'Descargar imagen'}
       </button>
