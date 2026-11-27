@@ -98,7 +98,8 @@
   html.imprimiendo-ticket, html.imprimiendo-ticket body { height: auto !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
   html.imprimiendo-ticket body > .ticket-portal {
     display: block !important; page: ticket;
-    width: 64mm !important; margin: 0 !important; padding: 0 0 0 6mm !important;
+    /* centrado: 64 mm de texto y 8 mm a cada lado del rollo de 80 mm (antes 6 mm a la izquierda y 10 a la derecha) */
+    width: 64mm !important; margin: 0 !important; padding: 0 0 0 8mm !important;
     font-family: system-ui, Arial, sans-serif !important; font-size: 11px !important; background: #fff !important;
   }
   html.imprimiendo-ticket body > .ticket-portal, html.imprimiendo-ticket body > .ticket-portal * { color: #000 !important; font-weight: 700 !important; }
