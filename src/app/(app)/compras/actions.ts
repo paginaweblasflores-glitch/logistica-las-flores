@@ -123,21 +123,27 @@ export async function recibirCompra(_: ActionResult, fd: FormData): Promise<Acti
 /** Ingreso directo del almacén: compras que el almacén maneja sin requerimiento ni orden de compra. */
 export async function registrarIngreso(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
-    const lineas = parseLines(fd.get('lineas')).filter((l) => l.producto_id && Number(l.cantidad) > 0)
-    if (!fd.get('almacen')) return { error: 'Seleccione el almacén.' }
+    // con «Todos»: cada producto trae su almacén; la compra queda en el almacén con más productos
+    const varios = fd.get('varios') === '1'
+    const lineas = parseLines(fd.get('lineas')).filter((l) => l.producto_id && Number(l.cantidad) > 0 && (!varios || l.almacen_id))
+    const conteo = new Map<string, number>()
+    for (const l of lineas) if (l.almacen_id) conteo.set(l.almacen_id, (conteo.get(l.almacen_id) ?? 0) + 1)
+    const almacen = varios ? [...conteo.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] : String(fd.get('almacen') ?? '')
+    if (!almacen && !varios) return { error: 'Seleccione el almacén.' }
     if (!lineas.length) return { error: 'Agregue al menos un producto con cantidad.' }
     if (lineas.some((l) => !(Number(l.precio) > 0))) return { error: 'Todos los productos deben tener su precio unitario (cópielo de la boleta).' }
     if (lineas.some((l) => enUnidadDelProducto(l).sinEquivalencia)) return { error: 'Indique cuánto trae cada unidad (por ejemplo «1 caja = 6 BOT»).' }
     const supabase = await createClient()
     const total = String(fd.get('total_documento') ?? '').replace(',', '.').trim()
     const { data, error } = await supabase.rpc('fn_ingreso_directo', {
-      p_almacen: String(fd.get('almacen')), p_proveedor: fd.get('proveedor') || null,
+      p_almacen: almacen, p_proveedor: fd.get('proveedor') || null,
       p_fecha: fechaRegistro(fd),
       p_tipo_doc: String(fd.get('tipo_documento') ?? ''), p_num_doc: String(fd.get('numero_documento') ?? ''),
       p_total_doc: total ? Number(total) : null,
       // cantidad y precio en la unidad del producto (si se escribió en cajas, paquetes…, se convierte)
       p_lineas: lineas.map((l) => { const u = enUnidadDelProducto(l, 'cantidad', 'precio')
-        return { producto_id: l.producto_id, cantidad: u.cantidad, precio: u.precio, fecha_vencimiento: l.fecha_vencimiento || null, observacion: u.nota || null } }),
+        return { producto_id: l.producto_id, cantidad: u.cantidad, precio: u.precio, fecha_vencimiento: l.fecha_vencimiento || null, observacion: u.nota || null,
+          ...(varios ? { almacen_id: l.almacen_id } : {}) } }),
       p_observacion: String(fd.get('observacion') ?? ''),
     })
     if (error) throw error

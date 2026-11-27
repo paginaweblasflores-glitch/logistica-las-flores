@@ -4,11 +4,14 @@ import { LineItems } from '@/components/line-items'
 import { avisarSuma } from '@/components/total-comprobante'
 
 /** Productos del ingreso: cantidad que entró y precio unitario de la boleta (el total se calcula solo). */
-export function IngresoLineas({ almacenId }: { almacenId?: string | null }) {
+export function IngresoLineas({ almacenId, almacenes }: { almacenId?: string | null
+  /** «Todos» arriba: se busca en todos los almacenes y cada producto entra al almacén que se elija */
+  almacenes?: string[] }) {
   return (
     <LineItems
       name="lineas"
       almacenId={almacenId}
+      almacenes={almacenes}
       totalKey="cantidad"
       priceKey="precio"
       onTotal={avisarSuma}

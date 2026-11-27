@@ -1,6 +1,5 @@
 import { AvisoStockDia, estadoStockDia } from '@/components/aviso-stock-dia'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
-import { ElegirAlmacen } from '@/components/elegir-almacen'
 import { getAlmacenes, getProveedores } from '@/lib/queries'
 import { PageHeader, Section } from '@/components/ui'
 import { Select } from '@/components/select'
@@ -25,7 +24,9 @@ import { COMPROBANTES } from '@/lib/documentos'
 export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.ReactNode; compraId?: string }) {
   void estadoStockDia()   // precarga: el aviso del stock del día se consulta junto con lo demás
   const [{ local }, sel, supabase] = await Promise.all([getAmbito(), getAlmacenActivo(), createClient()])
-  if (soloConsulta(sel)) return <ElegirAlmacen titulo="Nueva entrada" volver={{ href: '/entradas', label: 'Entradas' }} />
+  // «Todos» arriba (almacén con varios almacenes): una misma boleta trae productos para varios almacenes;
+  // cada producto entra al almacén que se elija (una compra, una OC; una entrada en cada almacén)
+  const varios = soloConsulta(sel)
   // compras que Logística ya marcó «Comprado» y deben llegar a este almacén (del requerimiento del almacén)
   let qCamino = supabase.from('compra')
     .select(`id, numero, fecha, fecha_compromiso, proveedor_id, oferta_id, proveedor:proveedor_id(razon_social), requerimiento:requerimiento_id(numero),
@@ -40,7 +41,7 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
   // solo las que traen productos del almacén (lo fuera de catálogo va al área, no aquí)
   const enCamino = ((camino ?? []) as unknown as CC[]).filter((c) => c.compra_detalle.some((d) => d.producto_id))
   const elegida = enCamino.find((c) => c.id === compraId)
-  const titulo = `Nueva entrada${sel.actual ? ` · ${sel.actual.corto}` : ''}`
+  const titulo = `Nueva entrada${sel.actual ? ` · ${sel.actual.corto}` : varios ? ' · varios almacenes' : ''}`
   const lista = enCamino.length > 0 && (
     <section className="card mb-5 p-4">
       <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><Truck className="size-4 text-brand-600" /> ¿Es la llegada de un requerimiento? Elíjalo y se carga lo pedido</p>
@@ -107,14 +108,15 @@ export async function FormularioCompraBoleta({ tabs, compraId }: { tabs?: React.
             <label><span className="label">N° del comprobante</span><input name="numero_documento" className="field" placeholder="B001-000123" /></label>
             <label><span className="label">Fecha y hora de ingreso</span><input type="datetime-local" name="fecha" defaultValue={ahora} className="field" /><input type="hidden" name="fecha_inicial" value={ahora} /></label>
             {/* el almacén es el elegido en el menú (ya lo dice el título) */}
-            {sel.actual
+            {varios ? <input type="hidden" name="varios" value="1" />
+              : sel.actual
               ? <input type="hidden" name="almacen" value={sel.actual.id} />
               : <label><span className="label">Almacén <span className="req">*</span></span><Select name="almacen" options={almacenes} defaultValue={principal?.id} required /></label>}
           </div>
         </Section>
         <Section title="Productos">
           <div className="space-y-3">
-            <IngresoLineas almacenId={sel.id} />
+            <IngresoLineas almacenId={sel.id} almacenes={varios ? sel.lista.map((a) => a.id) : undefined} />
           </div>
           {/* al final: el total de la boleta, para comparar con la suma de los productos */}
           <div className="mt-6 grid gap-4 md:grid-cols-4">

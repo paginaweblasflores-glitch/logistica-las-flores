@@ -26,7 +26,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 export default async function OrdenCompraPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const [{ data: c }, { data: det }, locales, panel, { data: plazo }, { data: firmasNeg }] = await Promise.all([
+  const [{ data: c }, { data: det }, locales, panel, { data: plazo }, { data: firmasNeg }, { data: almDet }] = await Promise.all([
     supabase.from('compra')
       .select('numero, fecha, estado, sin_orden, local_id, fecha_aprobacion, fecha_compromiso, observacion, incluye_igv, almacen:almacen_id(nombre), proveedor:proveedor_id(razon_social, ruc, direccion, telefono), requerimiento:requerimiento_id(numero, solicitante, area:area_id(nombre))')
       .eq('id', id).maybeSingle(),
@@ -36,6 +36,8 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
     supabase.from('v_compra_resumen').select('fecha_objetivo').eq('id', id).maybeSingle(),
     // las firmas de la OC del negocio (Configuración → Firmas de la orden de compra)
     supabase.from('compra').select('local:local_id(oc_elaborado_por, oc_aprobado_por)').eq('id', id).maybeSingle(),
+    // una factura con productos de varios almacenes: a qué almacén entra cada producto
+    supabase.from('compra_detalle').select('id, almacen:almacen_id(nombre)').eq('compra_id', id),
   ])
   // la OC es de Logística y Contabilidad; el almacén no la abre. La compra con boleta del almacén también tiene la
   // suya: se genera al registrar la entrada, con lo que trae la boleta
@@ -46,6 +48,10 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
   const proveedor = c.proveedor as unknown as { razon_social: string; ruc: string | null; direccion: string | null; telefono: string | null } | null
   const req = c.requerimiento as unknown as { numero: string; solicitante: string | null; area: { nombre: string } | null } | null
   const almacen = (c.almacen as unknown as { nombre: string } | null)?.nombre ?? '—'
+  // el almacén de cada producto (si la factura trae productos para varios almacenes)
+  const almDe = new Map(((almDet ?? []) as unknown as { id: string; almacen: { nombre: string } | null }[]).map((x) => [x.id, x.almacen?.nombre ?? almacen]))
+  const lugares = [...new Set([...almDe.values()])]
+  const corto = (n: string) => n.replace(/\s*—.*$/, '')
   const lineas = (det ?? []) as { id: string; producto: string; producto_codigo: string | null; unidad: string; cantidad_solicitada: number; precio_unitario: number }[]
 
   // los precios de la orden incluyen IGV (lo habitual) o no: el total a pagar siempre lleva IGV
@@ -113,7 +119,8 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
                 <td className={`${celda} w-8`}>{i + 1}</td>
                 <td className={`${celda} w-20 text-right tabular`}>{fmtQty(l.cantidad_solicitada)}</td>
                 <td className={`${celda} w-20`}>{l.unidad}</td>
-                <td className={celda}>{l.producto}{l.producto_codigo && <span className="text-muted"> ({l.producto_codigo})</span>}</td>
+                <td className={celda}>{l.producto}{l.producto_codigo && <span className="text-muted"> ({l.producto_codigo})</span>}
+                  {lugares.length > 1 && <span className="text-muted"> · {corto(almDe.get(l.id) ?? almacen)}</span>}</td>
                 <td className={`${celda} w-24 text-right tabular`}>{Number(l.precio_unitario) > 0 ? fmtSoles(l.precio_unitario) : '—'}</td>
                 <td className={`${celda} w-28 text-right tabular`}>{Number(l.precio_unitario) > 0 ? fmtSoles(Number(l.cantidad_solicitada) * Number(l.precio_unitario)) : '—'}</td>
               </tr>
@@ -136,7 +143,7 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
           <tbody>
             {/* la compra con boleta del almacén: el día en que llegó */}
             <Dato label="Fecha de entrega">{c.sin_orden ? fmtDate(c.fecha) : plazo?.fecha_objetivo ? fmtDate(plazo.fecha_objetivo) : 'Al aprobar la orden'}</Dato>
-            <Dato label="Lugar de entrega">{almacen}</Dato>
+            <Dato label="Lugar de entrega">{lugares.length > 1 ? lugares.join(' · ') : almacen}</Dato>
             <Dato label="Observaciones">{c.observacion ?? '—'}</Dato>
           </tbody>
         </table>
