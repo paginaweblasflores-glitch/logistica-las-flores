@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { ElegirAlmacen } from '@/components/elegir-almacen'
 import { TIPOS_MANUALES, type Sentido } from '@/lib/movimientos'
-import { PageHeader, Section, Note } from '@/components/ui'
+import { PageHeader, Section } from '@/components/ui'
 import { ComboInput } from '@/components/combo-input'
 import type { TipoOpc } from '@/components/tipo-movimiento'
 import { ActionForm } from '@/components/action-form'
@@ -44,7 +44,6 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
     <>
       <PageHeader title={`${titulo} · ${varios ? 'varios almacenes' : sel.actual!.corto}`} back={{ href: ruta, label: entrada ? 'Entradas' : 'Salidas' }} description={ayuda || undefined} />
       <AvisoStockDia compacto />
-      {varios && <div className="mb-4"><Note>El buscador busca en <b>todos sus almacenes</b>: elija de cuál sale cada producto. Al registrar se crea una salida en cada almacén y <b>un solo ticket</b> para firmar. Para merma o devolución, elija un almacén arriba.</Note></div>}
       <ActionForm action={varios ? registrarSalidaVarios : registrarEntradaSalida} className="space-y-5">
         <input type="hidden" name="sentido" value={sentido} />
         <input type="hidden" name="tipo" value={tipo} />
