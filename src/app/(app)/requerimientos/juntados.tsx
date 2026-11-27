@@ -39,19 +39,12 @@ export async function rlPorEnviar(localId?: string) {
   return count ?? 0
 }
 
-/** De cada requerimiento del almacén: si sus productos ya se enviaron al proveedor (todos, algunos o ninguno) */
-export async function estadoEnvio(ids: string[]) {
-  const supabase = await createClient()
-  const { data } = await supabase.from('requerimiento_detalle').select('requerimiento_id, enviado_at, cantidad_aprobada').in('requerimiento_id', ids)
-  const m = new Map<string, 'si' | 'parcial' | 'no'>()
-  for (const id of ids) {
-    const ls = (data ?? []).filter((d) => d.requerimiento_id === id && Number(d.cantidad_aprobada ?? 1) > 0)
-    const env = ls.filter((d) => d.enviado_at).length
-    m.set(id, ls.length && env === ls.length ? 'si' : env ? 'parcial' : 'no')
-  }
-  return m
+/** Para el almacén: su requerimiento ya llegó a Logística (lo que Logística hace con los proveedores no le toca) */
+export function EnviadoBadge() {
+  return <Badge tone="blue">Enviado</Badge>
 }
 
+/** Para Logística: si los productos ya se enviaron al proveedor (todos, algunos o ninguno) */
 export function EnvioBadge({ envio }: { envio: 'si' | 'parcial' | 'no' }) {
   return envio === 'si' ? <Badge tone="green">Enviado al proveedor</Badge> : envio === 'parcial' ? <Badge tone="amber">Enviado en parte</Badge> : <Badge tone="gray">Por enviar</Badge>
 }

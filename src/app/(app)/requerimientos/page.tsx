@@ -7,7 +7,7 @@ import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
 import { Select } from '@/components/select'
-import { ListaJuntados, PestanasOrigen, rlPorEnviar, estadoEnvio, EnvioBadge } from './juntados'
+import { ListaJuntados, PestanasOrigen, rlPorEnviar, EnviadoBadge } from './juntados'
 
 export const metadata = { title: 'Requerimientos' }
 
@@ -53,8 +53,6 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
     esLogistica ? porAprobar : Promise.resolve({ count: 0 }),
     esLogistica ? rlPorEnviar(local?.id) : Promise.resolve(0),
   ])
-  // el almacén ve si sus requerimientos ya se enviaron al proveedor (segundo viaje, solo con los de esta página)
-  const envio = delAlmacen && data?.length ? await estadoEnvio((data as { id: string }[]).map((r) => r.id)) : new Map<string, 'si' | 'parcial' | 'no'>()
   const puedeCrear = panel !== 'logistica' && !(panel === 'almacen' && soloConsulta(sel))
   const pct = kpi?.length ? kpi.filter((x) => x.dentro_objetivo).length / kpi.length : null
   // con un almacén elegido, la columna «Almacén» repetiría lo mismo en cada fila
@@ -91,7 +89,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
                     <Td>{r.horas_aprobacion === null ? <span className="text-xs text-muted">pendiente</span> : <Badge tone={r.dentro_objetivo ? 'green' : 'red'}>{r.horas_aprobacion} h</Badge>}</Td>
                   </>}
                   <Td>{r.parcial ? <Badge tone="amber">Atendido parcial</Badge>
-                    : delAlmacen && r.estado === 'aprobado' ? <EnvioBadge envio={envio.get(r.id) ?? 'no'} /> : <EstadoBadge estado={r.estado} />}</Td>
+                    : delAlmacen && r.estado === 'aprobado' ? <EnviadoBadge /> : <EstadoBadge estado={r.estado} />}</Td>
                 </tr>
               ))}</tbody>
             </Table>

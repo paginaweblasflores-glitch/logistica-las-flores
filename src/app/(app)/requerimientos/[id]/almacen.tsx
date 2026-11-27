@@ -3,7 +3,7 @@ import { PackageCheck, Printer, Layers } from 'lucide-react'
 import { ocCompleta, totalOrden } from '@/lib/orden-compra'
 import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
-import { EnvioBadge } from '../juntados'
+import { EnvioBadge, EnviadoBadge } from '../juntados'
 
 export type DetAlm = { id: string; producto_id: string | null; descripcion: string; stock_actual: number | null; cantidad_solicitada: number
   cantidad_aprobada: number | null; motivo: string | null
@@ -55,7 +55,8 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
       <PageHeader title={`Requerimiento ${r.numero}`} back={{ href: '/requerimientos', label: 'Requerimientos' }}
         description={`${r.almacen_nombre ?? 'Almacén'} · pedido el ${fmtDate(r.created_at, true)}${r.fecha_requerida ? ` · para el ${fmtDate(r.fecha_requerida)}` : ''}`}
         actions={<>
-          {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : r.estado === 'aprobado' ? <EnvioBadge envio={envio} /> : <EstadoBadge estado={r.estado} />}
+          {/* el almacén solo ve que su requerimiento llegó a Logística; Logística ve el avance con los proveedores */}
+          {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : r.estado === 'aprobado' ? (gestiona ? <EnvioBadge envio={envio} /> : <EnviadoBadge />) : <EstadoBadge estado={r.estado} />}
           {/* Logística lo trabaja junto con los demás del día */}
           {gestiona && consolidado && <LinkButton href={`/requerimientos/rl/${consolidado.id}`} variant="outline"><Layers className="size-4" /> Ver en {consolidado.numero}</LinkButton>}
           {cotVigente && <LinkButton href={`/cotizaciones/${cotVigente.id}`} variant="outline">Ver cotización {cotVigente.numero}</LinkButton>}
@@ -77,22 +78,22 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
       {r.observacion && <p className="mb-4 text-sm"><span className="text-muted">Observación:</span> {r.observacion}</p>}
 
       <Section icon={PackageCheck} title="Productos" bodyClassName="p-0"
-        stats={[{ label: 'Enviados al proveedor', value: `${enviadas} de ${pedidas.length}` }]}>
+        stats={gestiona ? [{ label: 'Enviados al proveedor', value: `${enviadas} de ${pedidas.length}` }] : []}>
         <Table>
-          <thead><tr><Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th><Th>Envío</Th>
+          <thead><tr><Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th>{gestiona && <Th>Envío</Th>}
             {recibido && <><Th right>Llegó</Th><Th right>Precio (boleta)</Th></>}{conObs && <Th>Observación</Th>}</tr></thead>
           <tbody>
             {det.map((d) => {
               const pedido = Number(d.cantidad_aprobada ?? d.cantidad_solicitada)
               const lleg = llego(d.producto_id)
               return (
-                <tr key={d.id} className={pedido === 0 ? 'text-muted line-through' : d.enviado_at ? 'bg-leaf-50/60' : ''}>
+                <tr key={d.id} className={pedido === 0 ? 'text-muted line-through' : gestiona && d.enviado_at ? 'bg-leaf-50/60' : ''}>
                   <Td right className="font-mono text-xs font-semibold">{codigo(d)}</Td>
                   <Td className="font-medium">{d.descripcion} <span className="text-xs text-muted">{d.producto?.unidad.codigo}</span></Td>
                   <Td right>{enPedido(d)
                     ? <>{fmtQty(d.cantidad_pedida)} {d.pedida!.nombre}<span className="block text-[11px] text-muted">= {fmtQty(d.cantidad_solicitada)} {d.producto?.unidad.codigo}</span></>
                     : fmtQty(d.cantidad_solicitada)}</Td>
-                  <Td>{pedido === 0 ? '—' : d.enviado_at ? <Badge tone="green">Enviado · {fmtDate(d.enviado_at, true)}</Badge> : <span className="text-xs text-muted">Por enviar</span>}</Td>
+                  {gestiona && <Td>{pedido === 0 ? '—' : d.enviado_at ? <Badge tone="green">Enviado · {fmtDate(d.enviado_at, true)}</Badge> : <span className="text-xs text-muted">Por enviar</span>}</Td>}
                   {recibido && <>
                     <Td right className={lleg < pedido && pedido !== 0 ? 'font-semibold text-amber-700' : 'font-semibold'}>{fmtQty(lleg)}{lleg < pedido && pedido !== 0 && <span className="block text-[11px] font-normal">de {fmtQty(pedido)}</span>}</Td>
                     <Td right>{fmtSoles(precio(d.producto_id))}</Td>
@@ -105,7 +106,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
               <tr key={d.id}>
                 <Td right className="text-muted">—</Td>
                 <Td className="font-medium">{d.producto?.nombre} <Badge tone="violet" className="ml-1">No estaba en el requerimiento</Badge></Td>
-                <Td right>—</Td><Td />
+                <Td right>—</Td>{gestiona && <Td />}
                 {recibido && <><Td right className="font-semibold">{fmtQty(d.cantidad_recibida)}</Td><Td right>{fmtSoles(d.precio_unitario)}</Td></>}
                 {conObs && <Td />}
               </tr>
