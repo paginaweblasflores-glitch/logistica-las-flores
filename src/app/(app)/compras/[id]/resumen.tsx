@@ -120,7 +120,7 @@ export function ResumenCompra({ c, lineas, fletes, negocio, localCodigo, proveed
               <dd className="flex flex-wrap gap-1">
                 {c.on_time !== null && <Badge tone={c.on_time ? 'green' : 'red'}>{c.on_time ? 'A tiempo' : 'Fuera de plazo'}</Badge>}
                 {c.in_full !== null && <Badge tone={c.in_full ? 'green' : 'amber'}>{c.in_full ? 'Completa' : `Incompleta · ${fmtPct(c.fill_rate)}`}</Badge>}
-                {directo && <Badge tone="gray">Sin orden de compra</Badge>}
+                {directo && <Badge tone="gray">Ingreso directo</Badge>}
               </dd>
             </dl>
           </div>

@@ -1,4 +1,4 @@
-import { Settings, Lock, Users, Warehouse, Layers } from 'lucide-react'
+import { Settings, Lock, Users, Warehouse, Layers, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getLocalesOpc } from '@/lib/queries'
 import { fmtDate, hoyLima, MESES } from '@/lib/format'
@@ -6,7 +6,7 @@ import { PageHeader, Section, Th, Td, Badge, Note } from '@/components/ui'
 import { Select } from '@/components/select'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
-import { actualizarUsuario, cerrarPeriodo, crearCatalogo, guardarAprobadores, guardarParametros, guardarZonas } from './actions'
+import { actualizarUsuario, cerrarPeriodo, crearCatalogo, guardarAprobadores, guardarFirmasOC, guardarParametros, guardarZonas } from './actions'
 import { ZONAS } from '@/lib/zonas'
 import { PagedTable } from '@/components/pager'
 
@@ -16,7 +16,7 @@ const PCT = new Set(['meta_otif', 'meta_diferencia_inventario', 'meta_fifo', 'me
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
-  const [{ data: params }, { data: cierres }, { data: usuarios }, { data: roles }, { data: almacenes }, { data: areas }, locales, { data: aprobadores }, { data: cats }] = await Promise.all([
+  const [{ data: params }, { data: cierres }, { data: usuarios }, { data: roles }, { data: almacenes }, { data: areas }, locales, { data: aprobadores }, { data: cats }, { data: firmas }] = await Promise.all([
     // solo los numéricos (metas y umbrales)
     supabase.from('parametro').select('clave, valor, descripcion').not('valor', 'is', null).order('clave'),
     supabase.from('periodo_cierre').select('local_id, anio, mes, cerrado, cerrado_at, local:local_id(nombre)').order('anio', { ascending: false }).order('mes', { ascending: false }),
@@ -27,6 +27,8 @@ export default async function ConfiguracionPage() {
     getLocalesOpc(),
     supabase.from('requerimiento_aprobador').select('id, nombre, cargo, monto_hasta').order('orden'),
     supabase.from('categoria').select('id, nombre, zona').is('padre_id', null).order('nombre'),
+    // quién firma la orden de compra en cada negocio
+    supabase.from('local').select('id, nombre, oc_elaborado_por, oc_aprobado_por').eq('activo', true).order('orden'),
   ])
   type C = { local_id: string; anio: number; mes: number; cerrado: boolean; cerrado_at: string; local: { nombre: string } }
 
@@ -53,6 +55,22 @@ export default async function ConfiguracionPage() {
         </Section>
 
         <div className="space-y-5">
+          {/* cada OC toma estos nombres (nadie los escribe al registrar la compra) */}
+          <Section icon={PenLine} title="Firmas de la orden de compra">
+            <ActionForm action={guardarFirmasOC} className="space-y-3">
+              <p className="text-xs text-muted">Cada orden de compra del negocio sale con estos nombres. Si cambia el personal, se cambian aquí.</p>
+              {(firmas ?? []).map((n) => (
+                <div key={n.id} className="grid gap-2 border-b border-line/70 pb-3 sm:grid-cols-2">
+                  <input type="hidden" name="firma_local" value={n.id} />
+                  <p className="text-sm font-semibold sm:col-span-2">{n.nombre}</p>
+                  <label><span className="label">Elaborado por (Almacén)</span><input name={`elaborado_${n.id}`} defaultValue={n.oc_elaborado_por ?? ''} className="field uppercase" /></label>
+                  <label><span className="label">Aprobado por (Logística)</span><input name={`aprobado_${n.id}`} defaultValue={n.oc_aprobado_por ?? ''} className="field uppercase" /></label>
+                </div>
+              ))}
+              <div className="flex justify-end"><SubmitButton soloConCambios>Guardar firmas</SubmitButton></div>
+            </ActionForm>
+          </Section>
+
           <Section icon={Users} title="Aprobadores de requerimientos">
             <ActionForm action={guardarAprobadores} className="space-y-3">
               <p className="text-xs text-muted">Se sugiere al primero cuyo tope cubre el monto estimado del requerimiento. Deje el tope vacío en el último (montos mayores). En cada requerimiento se puede elegir otro.</p>

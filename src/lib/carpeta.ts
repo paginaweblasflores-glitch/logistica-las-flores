@@ -63,9 +63,10 @@ export function carpetaDeCompra(c: CompraCarpeta, docs: DocCarpeta[]): ItemCarpe
     : tipoComp ? unir(nombreComprobante(tipoComp), c.numero_documento, estadoComp === 'invalido' && 'Sin comprobante válido', 'Falta registrar en Contabilidad') : null
 
   return [
-    { n: '01', titulo: 'Orden de compra', responsable: 'Logística', estado: c.sin_orden ? 'no_aplica' : c.estado === 'borrador' ? 'pendiente' : 'listo',
-      detalle: c.sin_orden ? 'Compra directa del almacén (sin orden)' : c.estado === 'borrador' ? 'Falta aprobarla' : null,
-      enlace: c.sin_orden ? undefined : { href: `/compras/${c.id}/orden`, label: 'Ver / imprimir' } },
+    // la compra con boleta del almacén genera su OC al registrar la entrada
+    { n: '01', titulo: 'Orden de compra', responsable: c.sin_orden ? 'Almacén' : 'Logística', estado: c.estado === 'borrador' ? 'pendiente' : 'listo',
+      detalle: c.sin_orden ? 'Generada al registrar la entrada' : c.estado === 'borrador' ? 'Falta aprobarla' : null,
+      enlace: { href: `/compras/${c.id}/orden`, label: 'Ver / imprimir' } },
     { n: '02', titulo: 'Proforma / cotización', responsable: 'Logística', tipo: 'proforma', doc: proforma,
       estado: c.cotizacion ? 'listo' : c.sin_orden && !proforma ? 'no_aplica' : segun(proforma),
       detalle: motivo(proforma) ?? unir(proforma?.numero && `N° ${proforma.numero}`, c.sin_orden && !proforma && 'Compra directa'),

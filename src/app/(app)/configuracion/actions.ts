@@ -103,3 +103,19 @@ export async function guardarZonas(_: ActionResult, fd: FormData): Promise<Actio
     return { message: 'Zonas del almacén actualizadas.' }
   })
 }
+
+/** Firmas de la orden de compra de cada negocio («Elaborado por» del almacén y «Aprobado por» de Logística) */
+export async function guardarFirmasOC(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const supabase = await createClient()
+    const locales = fd.getAll('firma_local').map(String)
+    for (const id of locales) {
+      check(await supabase.rpc('fn_guardar_firmas_oc', {
+        p_local: id, p_elaborado: String(fd.get(`elaborado_${id}`) ?? ''), p_aprobado: String(fd.get(`aprobado_${id}`) ?? ''),
+      }))
+    }
+    revalidatePath('/configuracion')
+    revalidatePath('/compras', 'layout')
+    return { message: 'Firmas de la orden de compra guardadas.' }
+  })
+}

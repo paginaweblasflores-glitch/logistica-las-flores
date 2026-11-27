@@ -26,20 +26,21 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 export default async function OrdenCompraPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const [{ data: c }, { data: det }, locales, panel, { data: plazo }] = await Promise.all([
+  const [{ data: c }, { data: det }, locales, panel, { data: plazo }, { data: firmasNeg }] = await Promise.all([
     supabase.from('compra')
-      .select('numero, fecha, estado, sin_orden, local_id, fecha_aprobacion, fecha_compromiso, forma_pago, observacion, incluye_igv, created_by, aprobada_por, almacen:almacen_id(nombre), proveedor:proveedor_id(razon_social, ruc, direccion, telefono), requerimiento:requerimiento_id(numero, solicitante, area:area_id(nombre))')
+      .select('numero, fecha, estado, sin_orden, local_id, fecha_aprobacion, fecha_compromiso, observacion, incluye_igv, almacen:almacen_id(nombre), proveedor:proveedor_id(razon_social, ruc, direccion, telefono), requerimiento:requerimiento_id(numero, solicitante, area:area_id(nombre))')
       .eq('id', id).maybeSingle(),
     supabase.from('v_compra_detalle').select('id, producto, producto_codigo, unidad, cantidad_solicitada, precio_unitario').eq('compra_id', id),
     getLocales(), getPanel(),
     // entrega pactada o, si no se pactó, la aprobación + el plazo de Configuración (lo mismo que «Debe llegar»)
     supabase.from('v_compra_resumen').select('fecha_objetivo').eq('id', id).maybeSingle(),
+    // las firmas de la OC del negocio (Configuración → Firmas de la orden de compra)
+    supabase.from('compra').select('local:local_id(oc_elaborado_por, oc_aprobado_por)').eq('id', id).maybeSingle(),
   ])
-  // la OC es de Logística y Contabilidad; el almacén no la abre
-  if (!c || c.sin_orden || !imprimeOC(panel)) notFound()
-  const firmantes = [c.created_by, c.aprobada_por].filter(Boolean) as string[]
-  const { data: usuarios } = firmantes.length ? await supabase.from('usuario').select('id, nombre').in('id', firmantes) : { data: [] }
-  const nombre = (u: string | null) => usuarios?.find((x) => x.id === u)?.nombre ?? null
+  // la OC es de Logística y Contabilidad; el almacén no la abre. La compra con boleta del almacén también tiene la
+  // suya: se genera al registrar la entrada, con lo que trae la boleta
+  if (!c || !imprimeOC(panel)) notFound()
+  const firmas = (firmasNeg?.local as unknown as { oc_elaborado_por: string | null; oc_aprobado_por: string | null } | null) ?? null
 
   const negocio = locales.find((l) => l.id === c.local_id)
   const proveedor = c.proveedor as unknown as { razon_social: string; ruc: string | null; direccion: string | null; telefono: string | null } | null
@@ -133,19 +134,19 @@ export default async function OrdenCompraPage({ params }: { params: Promise<{ id
         <table className="mb-8 w-full border-collapse">
           <thead><tr><th colSpan={2} className={`${titulo} text-left`}>3. Condiciones</th></tr></thead>
           <tbody>
-            <Dato label="Fecha de entrega">{plazo?.fecha_objetivo ? fmtDate(plazo.fecha_objetivo) : 'Al aprobar la orden'}</Dato>
+            {/* la compra con boleta del almacén: el día en que llegó */}
+            <Dato label="Fecha de entrega">{c.sin_orden ? fmtDate(c.fecha) : plazo?.fecha_objetivo ? fmtDate(plazo.fecha_objetivo) : 'Al aprobar la orden'}</Dato>
             <Dato label="Lugar de entrega">{almacen}</Dato>
-            <Dato label="Forma de pago">{c.forma_pago ?? '—'}</Dato>
             <Dato label="Observaciones">{c.observacion ?? '—'}</Dato>
           </tbody>
         </table>
 
-        <div className="firmas grid grid-cols-2 gap-10 pt-10 text-center text-xs">
-          {[['Elaborado por', nombre(c.created_by), 'Logística'], ['Aprobado por', nombre(c.aprobada_por), '']].map(([t, n, cargo]) => (
+        {/* solo los nombres (sin línea de firma): los guardados en Configuración para el negocio */}
+        <div className="firmas grid grid-cols-2 gap-10 pt-4 text-xs">
+          {[['Elaborado por', firmas?.oc_elaborado_por ?? null, `Almacén ${negocio?.nombre ?? ''}`.trim()], ['Aprobado por', firmas?.oc_aprobado_por ?? null, 'Logística']].map(([t, n, cargo]) => (
             <div key={t}>
-              <div className="mx-auto mb-1 h-10 w-56 border-b border-ink-900" />
               <p className="font-bold uppercase">{t}</p>
-              <p>{n ?? ' '}</p>
+              <p className="text-sm">{n ?? '—'}</p>
               {cargo && <p className="text-muted">{cargo}</p>}
             </div>
           ))}

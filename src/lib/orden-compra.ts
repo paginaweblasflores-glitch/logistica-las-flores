@@ -1,10 +1,10 @@
 /**
- * La orden de compra se imprime solo cuando está completa: con proveedor y precios. En una compra marcada
- * «Comprado» eso pasa cuando el almacén registra la llegada con la boleta; con cotización, desde que se elige
- * el proveedor. Las compras directas del almacén (sin orden) y las anuladas no tienen OC.
+ * La orden de compra se imprime solo cuando está completa: con proveedor y precios. La compra con boleta que
+ * registra el almacén ya la trae completa (se genera al registrar la entrada); con cotización, desde que se
+ * elige el proveedor. Las anuladas no tienen OC.
  */
-export function ocCompleta(c: { sin_orden?: boolean | null; estado: string; proveedor: unknown; total: number }) {
-  return !c.sin_orden && c.estado !== 'anulada' && !!c.proveedor && c.total > 0
+export function ocCompleta(c: { estado: string; proveedor: unknown; total: number }) {
+  return c.estado !== 'anulada' && !!c.proveedor && c.total > 0
 }
 
 /** Quién imprime la OC: Logística (es su documento) y Contabilidad (va en la carpeta). El almacén no. */

@@ -19,7 +19,7 @@ const ALERTAS = [
   { id: 'alertas', nombre: 'Solo con alertas' },
   { id: 'diferencia', nombre: 'Precio distinto a la orden' },
   { id: 'sube', nombre: 'Precio subió' },
-  { id: 'sin_orden', nombre: 'Sin orden de compra' },
+  { id: 'sin_orden', nombre: 'Ingreso directo del almacén' },
   { id: 'cuadre', nombre: 'Comprobante no cuadra' },
 ]
 
@@ -121,7 +121,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
         <Stat label="Total ingresado" value={fmtSoles(total)} hint={`${docs} ${docs === 1 ? 'comprobante' : 'comprobantes'} · ${todas.length} productos`} />
         <Stat label="Precio distinto a la orden" value={nDif} tone={nDif ? 'warn' : 'default'} hint="La boleta trajo otro precio" />
         <Stat label="Precio subió" value={nSube} tone={nSube ? 'bad' : 'default'} hint={`Más del ${fmtPct(umbral)} vs. compra anterior`} />
-        <Stat label="Sin orden de compra" value={docsSinOrden} hint={noCuadra.size ? `${noCuadra.size} comprobante(s) no cuadran` : 'Ingresos directos del almacén'} tone={noCuadra.size ? 'warn' : 'default'} />
+        <Stat label="Ingresos directos" value={docsSinOrden} hint={noCuadra.size ? `${noCuadra.size} comprobante(s) no cuadran` : 'Ingresos directos del almacén'} tone={noCuadra.size ? 'warn' : 'default'} />
       </div>
 
       <Section title={`Ingresos por mes · ${anio}`} className="mb-5">
@@ -148,7 +148,7 @@ export default async function IngresosPage({ searchParams }: { searchParams: Pro
                   {sube(r) && <Badge tone="red">Subió {fmtPct(r.variacion_pct)}</Badge>}
                   {Number(r.precio_unitario) === 0 && <Badge tone="red">Sin precio</Badge>}
                   {noCuadra.has(r.compra_id) && <Badge tone="amber">No cuadra</Badge>}
-                  {r.sin_orden && <Badge tone="gray">Sin orden</Badge>}
+                  {r.sin_orden && <Badge tone="gray">Directo</Badge>}
                 </span></Td>
               </tr>
             ))}

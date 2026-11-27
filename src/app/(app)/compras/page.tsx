@@ -29,16 +29,14 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
     .select('id, numero, fecha, local_codigo, proveedor, proveedor_id, ciudad, estado, tipo_documento, numero_documento, items, total, ahorro, costo_transporte, on_time, in_full, horas_entrega, fecha_objetivo, diferencias_precio, solo_fuera_catalogo, cotizacion_id, compra_documento(tipo, estado, numero, fecha, monto, medio, nota, archivo_path, archivo_nombre, archivo_mime), compra_contable(estado, observacion, serie, numero)', { count: 'exact' })
     .gte('fecha', desde).lte('fecha', hasta)
   if (local) q = q.eq('local_id', local.id)
-  // los ingresos directos del almacén (sin orden) se ven en «Ingresos de almacén», no aquí
-  q = q.eq('sin_orden', false)
   if (estado) q = q.eq('estado', estado)
   if (proveedor) q = q.eq('proveedor_id', proveedor)
   if (ciudad) q = q.eq('ciudad_id', ciudad)
   // la lista, el resumen (agregado en la base) y las listas de los filtros: al mismo tiempo
   const [{ data, count }, { data: resumen }, proveedores, ciudades] = await Promise.all([
     q.order('fecha', { ascending: false }).order('numero', { ascending: false }).range(from, to),
-    // el total suma solo las órdenes de la lista (sin las compras directas del almacén)
-    supabase.rpc('fn_compras_resumen', { p_local: local?.id ?? null, p_desde: desde, p_hasta: hasta, p_solo_ordenes: true }),
+    // todas las compras tienen su OC (también la compra con boleta del almacén: se genera al registrar la entrada)
+    supabase.rpc('fn_compras_resumen', { p_local: local?.id ?? null, p_desde: desde, p_hasta: hasta }),
     getProveedores(), getCiudades(),
   ])
   // avance de la carpeta de cada compra (sus documentos vienen en la misma consulta)

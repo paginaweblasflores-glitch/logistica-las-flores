@@ -135,9 +135,9 @@ export default async function CompraPage({ params }: { params: Promise<{ id: str
         actions={<>
           <EstadoBadge estado={c.estado} />
           {/* la OC: solo Logística y Contabilidad, y solo completa (con proveedor y precios) */}
-          {imprimeOC(panel) && (ocCompleta({ sin_orden: c.sin_orden, estado: c.estado, proveedor: c.proveedor, total: Number(c.total ?? 0) })
+          {imprimeOC(panel) && (ocCompleta({ estado: c.estado, proveedor: c.proveedor, total: Number(c.total ?? 0) })
             ? <LinkButton href={`/compras/${id}/orden`} variant="outline" size="sm"><Printer className="size-3.5" /> Imprimir OC</LinkButton>
-            : !c.sin_orden && c.estado !== 'anulada' && <span className="max-w-64 text-xs text-muted">{AVISO_OC}</span>)}
+            : c.estado !== 'anulada' && <span className="max-w-64 text-xs text-muted">{AVISO_OC}</span>)}
           {logistica && c.estado === 'borrador' && (
             <ActionForm action={aprobarCompra}><input type="hidden" name="id" value={id} /><SubmitButton variant="dark" size="sm">Aprobar compra</SubmitButton></ActionForm>
           )}
