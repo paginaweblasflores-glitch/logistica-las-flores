@@ -45,6 +45,34 @@ export async function registrarEntradaSalida(_: ActionResult, fd: FormData): Pro
   })
 }
 
+/**
+ * Salida a un área con productos de VARIOS almacenes del negocio («Todos» arriba): el sistema crea una salida en cada
+ * almacén (cada una con su número), todas o ninguna, y las une en un solo ticket para firmar.
+ */
+export async function registrarSalidaVarios(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  return run(async () => {
+    const crudas = parseLines(fd.get('lineas')).filter((l) => l.producto_id && l.almacen_id && Number(l.cantidad) > 0)
+    if (crudas.some((l) => enUnidadDelProducto(l).sinEquivalencia)) return { error: 'Indique cuánto trae cada unidad (por ejemplo «1 caja = 6 BOT»).' }
+    if (!crudas.length) return { error: 'Agregue al menos un producto con cantidad mayor a cero.' }
+    const lineas = crudas.map((l) => {
+      const u = enUnidadDelProducto(l, 'cantidad', 'costo_unitario')
+      return { almacen_id: l.almacen_id, producto_id: l.producto_id, cantidad: u.cantidad, costo_unitario: null, fecha_vencimiento: null,
+        observacion: [u.nota, l.observacion].filter(Boolean).join(' · ') || null }
+    })
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('fn_salida_varios_almacenes', {
+      p_lineas: lineas, p_fecha: fechaRegistro(fd), p_area: String(fd.get('area') ?? ''),
+      p_recibe: String(fd.get('recibe') ?? ''), p_observacion: String(fd.get('observacion') ?? ''),
+    })
+    if (error) throw error
+    const r = data as { grupo: string; salidas: { id: string; nro: string }[] }
+    revalidatePath('/inventario', 'layout')
+    revalidatePath('/salidas', 'layout')
+    // el ticket (uno solo, con los productos de todos los almacenes) sale desde la primera salida
+    redirect(`/salidas/${r.salidas[0].id}?imprimir=1`)
+  })
+}
+
 export async function anularMovimiento(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
     const supabase = await createClient()

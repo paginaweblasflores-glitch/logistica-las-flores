@@ -3,13 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { ElegirAlmacen } from '@/components/elegir-almacen'
 import { TIPOS_MANUALES, type Sentido } from '@/lib/movimientos'
-import { PageHeader, Section } from '@/components/ui'
+import { PageHeader, Section, Note } from '@/components/ui'
 import { ComboInput } from '@/components/combo-input'
 import type { TipoOpc } from '@/components/tipo-movimiento'
 import { ActionForm } from '@/components/action-form'
 import { SubmitButton } from '@/components/submit-button'
 import { LineasEntradaSalida } from './lineas-es'
-import { registrarEntradaSalida } from './actions'
+import { registrarEntradaSalida, registrarSalidaVarios } from './actions'
 import { ahoraLima } from '@/lib/format'
 
 /** Tipos que se eligen en «Tipo de entrada / salida»: los fijos y los que el almacén escribió antes («Donación»…) */
@@ -28,7 +28,9 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
   const ruta = entrada ? '/entradas' : '/salidas'
   const titulo = entrada ? 'Nueva entrada' : 'Nueva salida'
   const sel = await getAlmacenActivo()
-  if (soloConsulta(sel) || !sel.actual) return <ElegirAlmacen titulo={titulo} volver={{ href: ruta, label: entrada ? 'Entradas' : 'Salidas' }} />
+  // «Todos» arriba: la salida a un área puede llevar productos de varios almacenes (una salida por almacén, un ticket)
+  const varios = !entrada && tipo === 'salida_consumo' && soloConsulta(sel)
+  if (!varios && (soloConsulta(sel) || !sel.actual)) return <ElegirAlmacen titulo={titulo} volver={{ href: ruta, label: entrada ? 'Entradas' : 'Salidas' }} />
   const { local } = await getAmbito()
   const supabase = await createClient()
   const conArea = tipo === 'salida_consumo'
@@ -40,13 +42,14 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
 
   return (
     <>
-      <PageHeader title={`${titulo} · ${sel.actual.corto}`} back={{ href: ruta, label: entrada ? 'Entradas' : 'Salidas' }} description={ayuda || undefined} />
+      <PageHeader title={`${titulo} · ${varios ? 'varios almacenes' : sel.actual!.corto}`} back={{ href: ruta, label: entrada ? 'Entradas' : 'Salidas' }} description={ayuda || undefined} />
       <AvisoStockDia compacto />
-      <ActionForm action={registrarEntradaSalida} className="space-y-5">
+      {varios && <div className="mb-4"><Note>El buscador busca en <b>todos sus almacenes</b>: elija de cuál sale cada producto. Al registrar se crea una salida en cada almacén y <b>un solo ticket</b> para firmar. Para merma o devolución, elija un almacén arriba.</Note></div>}
+      <ActionForm action={varios ? registrarSalidaVarios : registrarEntradaSalida} className="space-y-5">
         <input type="hidden" name="sentido" value={sentido} />
         <input type="hidden" name="tipo" value={tipo} />
         {motivo && <input type="hidden" name="motivo" value={motivo} />}
-        <input type="hidden" name="almacen" value={sel.actual.id} />
+        {!varios && <input type="hidden" name="almacen" value={sel.actual!.id} />}
         {/* como se trabaja: primero quién y para qué (área, quien recibe), luego se despachan los productos */}
         <Section title={entrada ? 'Datos de la entrada' : 'Datos de la salida'}>
           {/* el tipo va primero: al cambiarlo se recarga el formulario */}
@@ -66,7 +69,7 @@ export async function FormularioEntradaSalida({ sentido, tipo, tabs, motivo }: {
           </div>
         </Section>
         <Section title="Productos">
-          <LineasEntradaSalida almacenId={sel.actual.id} entrada={entrada} />
+          <LineasEntradaSalida almacenId={varios ? null : sel.actual!.id} almacenes={varios ? sel.lista.map((a) => a.id) : undefined} entrada={entrada} />
           <label className="mt-6 block"><span className="label">Observación <span className="font-normal normal-case text-subtle">(opcional)</span></span>
             <input name="observacion" className="field" placeholder={tipo === 'merma' ? 'Vencido, malogrado, roto…' : ''} /></label>
         </Section>

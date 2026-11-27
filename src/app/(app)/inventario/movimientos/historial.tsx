@@ -37,7 +37,8 @@ export async function Historial({ sentido, params }: { sentido: Sentido; params:
     almacen: { nombre: string }; area: { nombre: string } | null; motivo: { nombre: string; codigo: string } | null; movimiento_detalle: { cantidad: number; costo_unitario: number | null }[] }
   const filas = (data ?? []) as unknown as Row[]
   const varios = !sel.id && sel.lista.length !== 1
-  const nueva = puedeRegistrar ? <LinkButton href={`${ruta}/nueva`}><Plus className="size-4" /> {entrada ? 'Nueva entrada' : 'Nueva salida'}</LinkButton> : undefined
+  // con «Todos», la salida a un área sí se registra: con productos de varios almacenes (una salida por almacén)
+  const nueva = puedeRegistrar || (panel === 'almacen' && !entrada) ? <LinkButton href={`${ruta}/nueva`}><Plus className="size-4" /> {entrada ? 'Nueva entrada' : 'Nueva salida'}</LinkButton> : undefined
 
   return (
     <>

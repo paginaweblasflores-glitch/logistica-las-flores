@@ -79,7 +79,7 @@ async function Guardia({ children }: { children: React.ReactNode }) {
       {panel === 'almacen' && soloConsulta(almacenSel) && (
         <p className="no-print mb-5 flex items-center gap-2 rounded-xl border border-line bg-sand px-4 py-2.5 text-sm text-ink-700">
           <Info className="size-4 shrink-0 text-muted" aria-hidden />
-          Está viendo <b>Todos</b> los almacenes (solo consulta). Para registrar entradas, salidas, traspasos o pedidos, elija un almacén en el menú.
+          Está viendo <b>Todos</b> los almacenes. Aquí puede hacer una <b>salida a un área</b> con productos de varios almacenes; para entradas, otras salidas, traspasos o pedidos, elija un almacén en el menú.
         </p>
       )}
       {children}

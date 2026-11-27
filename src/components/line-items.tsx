@@ -34,14 +34,20 @@ function lineaDe(p: ProductoLite): Line {
   return { producto_id: p.id, descripcion: p.nombre, unidad: p.unidad, codigo: p.codigo, controla_lote: p.controla_lote ? '1' : '',
     stock: p.stock === null || p.stock === undefined ? '' : String(p.stock),
     unidad_id: p.unidad_id ?? '', contenido_unidad_id: p.contenido_unidad_id ?? '', contenido_unidad: p.contenido_unidad ?? '', contenido: p.contenido ? String(p.contenido) : '',
-    presentacion_id: p.presentacion_id ?? '', presentacion: p.presentacion ?? '', presentacion_cantidad: p.presentacion_cantidad ? String(p.presentacion_cantidad) : '' }
+    presentacion_id: p.presentacion_id ?? '', presentacion: p.presentacion ?? '', presentacion_cantidad: p.presentacion_cantidad ? String(p.presentacion_cantidad) : '',
+    // salida de varios almacenes: de cuál sale (lo eligió el almacenero en el buscador)
+    ...(p.almacen_id ? { almacen_id: p.almacen_id, almacen: p.almacen ?? '' } : {}) }
 }
+/** la misma línea = el mismo producto del mismo almacén */
+const mismo = (l: Line, p: ProductoLite) => l.producto_id === p.id && (l.almacen_id ?? '') === (p.almacen_id ?? '')
 
 /**
  * Editor de líneas de documento. Serializa las líneas como JSON en un input oculto
  * (`name`) para enviarlas en una Server Action.
  */
-export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeText, initial = [], almacenId, mostrarStock = false, herramientas, onTotal, topeStock = false, mostrarVence = false }: {
+export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeText, initial = [], almacenId, almacenes, mostrarStock = false, herramientas, onTotal, topeStock = false, mostrarVence = false }: {
+  /** salida de varios almacenes: el buscador busca en todos y cada línea lleva el almacén de donde sale */
+  almacenes?: string[]
   /** salidas y traspasos: debajo de cada producto, cuál entregar primero (el que vence antes), como lo descuenta el sistema */
   mostrarVence?: boolean
   /** salidas y traspasos: la cantidad no puede pasar del stock del almacén (convertido a la unidad elegida) */
@@ -79,7 +85,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
 
   function agregarVarios(productos: { p: ProductoLite; valores?: Record<string, string> }[]) {
     setLines((ls) => {
-      const nuevos = productos.filter(({ p }) => !ls.some((l) => l.producto_id === p.id)).map(({ p, valores }) => {
+      const nuevos = productos.filter(({ p }) => !ls.some((l) => mismo(l, p))).map(({ p, valores }) => {
         const base = lineaDe(p)
         for (const f of fields) base[f.key] = valores?.[f.key] ?? (f.init ? f.init(p) : '')
         return base
@@ -88,7 +94,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
     })
   }
   function add(p: ProductoLite) {
-    if (lines.some((l) => l.producto_id === p.id)) return
+    if (lines.some((l) => mismo(l, p))) return
     const base = lineaDe(p)
     for (const f of fields) base[f.key] = f.init ? f.init(p) : ''
     setLines((ls) => [...ls, base])
@@ -102,7 +108,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
   // con tope: la cantidad (en la unidad elegida) no pasa del stock; al cambiar la unidad también se recorta
   const tope = (l: Line) => {
     // sin fila de stock en el almacén = 0 (no hay nada que sacar)
-    if (!topeStock || !campoUnidad || !almacenId || l.stock === undefined) return l
+    if (!topeStock || !campoUnidad || !(almacenId || l.almacen_id) || l.stock === undefined) return l
     const f = factorUnidad(unidades, l, l[campoUnidad.key], l.equivale)
     if (!f) return l
     const max = Math.floor((Number(l.stock) || 0) / f * 1000) / 1000
@@ -111,24 +117,28 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
   // lotes con stock de los productos de la lista, en el orden en que salen (vence antes → sin fecha al final)
   const [lotes, setLotes] = useState<Record<string, { fv: string | null; disp: number }[]>>({})
   const ids = lines.map((l) => l.producto_id).filter(Boolean).sort().join(',')
+  // con varios almacenes, los lotes van por producto Y almacén
+  const claveLote = (producto: string | null | undefined, almacen: string | null | undefined) => (almacenes?.length ? `${producto}|${almacen}` : producto ?? '')
+  const listaAlm = almacenes?.join(',') ?? ''
   useEffect(() => {
-    if (!mostrarVence || !almacenId || !ids) return
+    if (!mostrarVence || !(almacenId || listaAlm) || !ids) return
     // si cambian los productos o el almacén antes de que llegue la respuesta, esa respuesta ya no vale
     let vigente = true
     const cargar = async () => {
-      const { data, error } = await createClient().from('v_lote_fifo').select('producto_id, fecha_vencimiento, cantidad_disponible')
-        .eq('almacen_id', almacenId).in('producto_id', ids.split(',')).order('orden_salida')
+      const q = createClient().from('v_lote_fifo').select('producto_id, almacen_id, fecha_vencimiento, cantidad_disponible')
+      const { data, error } = await (almacenId ? q.eq('almacen_id', almacenId) : q.in('almacen_id', listaAlm.split(',')))
+        .in('producto_id', ids.split(',')).order('orden_salida')
       if (!vigente) return
       const m: Record<string, { fv: string | null; disp: number }[]> = {}
-      if (!error) for (const x of data ?? []) (m[x.producto_id] ??= []).push({ fv: x.fecha_vencimiento, disp: Number(x.cantidad_disponible) })
+      if (!error) for (const x of data ?? []) (m[listaAlm ? `${x.producto_id}|${x.almacen_id}` : x.producto_id] ??= []).push({ fv: x.fecha_vencimiento, disp: Number(x.cantidad_disponible) })
       setLotes(m)
     }
     void cargar()
     return () => { vigente = false }
-  }, [mostrarVence, almacenId, ids])
+  }, [mostrarVence, almacenId, listaAlm, ids])
   // de qué fechas sale la cantidad escrita (en la unidad del producto); sin cantidad, la primera
   const entregar = (l: Line) => {
-    const ls = mostrarVence && almacenId && ids ? lotes[l.producto_id ?? ''] : undefined
+    const ls = mostrarVence && (almacenId || listaAlm) && ids ? lotes[claveLote(l.producto_id, l.almacen_id)] : undefined
     if (!ls?.length || ls.every((x) => !x.fv)) return null
     const f = campoUnidad ? factorUnidad(unidades, l, l[campoUnidad.key], l.equivale) ?? 1 : 1
     let resto = (Number(l.cantidad) || 0) * f
@@ -157,6 +167,8 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
     return () => window.removeEventListener(EVENTO_REPARTIR, f)
   }, [priceKey])
   const remove = (i: number) => setLines((ls) => ls.filter((_, j) => j !== i))
+  // código del producto en su almacén (uno solo o varios)
+  const conCodigo = !!almacenId || !!almacenes?.length
 
   const total = useMemo(() => {
     if (!totalKey || !priceKey) return null
@@ -168,7 +180,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
     <div className="space-y-3">
       <input type="hidden" name={name} value={JSON.stringify(serializadas)} />
       <div className="flex flex-wrap gap-2">
-        <ProductPicker onSelect={add} tipos={tipos} almacenId={almacenId} className="min-w-72 flex-1" placeholder="Agregar producto: escriba nombre o código…" />
+        <ProductPicker onSelect={add} tipos={tipos} almacenId={almacenId} almacenes={almacenes} className="min-w-72 flex-1" placeholder="Agregar producto: escriba nombre o código…" />
         {herramientas?.(agregarVarios)}
         {allowFreeText && (
           <div className="flex min-w-72 flex-1 gap-2">
@@ -186,7 +198,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
           <thead>
             <tr>
               <th className="th w-12">Ítem</th>
-              {almacenId && <th className="th w-16 text-right">Cód.</th>}
+              {conCodigo && <th className="th w-16 text-right">Cód.</th>}
               <th className="th">Producto</th>
               {fields.map((f) => <th key={f.key} className="th" style={{ width: f.width }}>{f.label}</th>)}
               {total !== null && <th className="th text-right">Importe</th>}
@@ -197,8 +209,10 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
             {lines.map((l, i) => (
               <tr key={(l.producto_id ?? l.descripcion) + i}>
                 <td className="td text-muted tabular">{i + 1}</td>
-                {almacenId && <td className="td text-right font-mono text-xs font-semibold tabular">{l.codigo ?? '—'}</td>}
+                {conCodigo && <td className="td text-right font-mono text-xs font-semibold tabular">{l.codigo ?? '—'}</td>}
                 <td className="td">
+                  {/* varios almacenes: de cuál sale */}
+                  {l.almacen && <span className="mr-1.5 rounded bg-ink-900 px-1.5 py-0.5 text-[11px] font-bold text-white">{l.almacen}</span>}
                   <span className="font-medium">{l.descripcion}</span>
                   <span className="ml-1.5 text-xs text-muted">{l.unidad}</span>
                   {mostrarStock && <span className="block text-xs text-muted">Stock: {enDosUnidades(l.stock, l.unidad, l.presentacion, l.presentacion_cantidad)}</span>}
@@ -249,13 +263,13 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
               </tr>
             ))}
             {!lines.length && (
-              <tr><td colSpan={fields.length + (almacenId ? 5 : 4)} className="td py-8 text-center text-muted">Aún no hay productos. Use el buscador para agregarlos.</td></tr>
+              <tr><td colSpan={fields.length + (conCodigo ? 5 : 4)} className="td py-8 text-center text-muted">Aún no hay productos. Use el buscador para agregarlos.</td></tr>
             )}
           </tbody>
           {total !== null && lines.length > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={fields.length + (almacenId ? 3 : 2)} className="px-3 py-2.5 text-right text-sm font-semibold">Total</td>
+                <td colSpan={fields.length + (conCodigo ? 3 : 2)} className="px-3 py-2.5 text-right text-sm font-semibold">Total</td>
                 <td className="px-3 py-2.5 text-right text-base font-bold tabular">{fmtSoles(total)}</td>
                 <td />
               </tr>

@@ -15,13 +15,15 @@ import { anularMovimiento } from './actions'
 export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string; sentido: Sentido; imprimir?: boolean }) {
   const supabase = await createClient()
   const { data } = await supabase.from('movimiento')
-    .select(`id, nro, fecha, tipo, anulado, motivo_anulacion, anulado_at, documento, observacion, recibe, referencia_tipo, referencia_id, almacen_id,
+    .select(`id, nro, fecha, tipo, anulado, motivo_anulacion, anulado_at, documento, observacion, recibe, referencia_tipo, referencia_id, almacen_id, grupo_id,
              almacen:almacen_id(nombre), local:local_id(codigo, nombre), area:area_id(nombre),
              movimiento_detalle(id, cantidad, costo_unitario, fecha_vencimiento, lote_consumo(cantidad, lote:lote_id(fecha_vencimiento)), producto:producto_id(nombre, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
     .eq('id', id).maybeSingle()
   if (!data) notFound()
   type M = { id: string; nro: string | null; fecha: string; tipo: string; anulado: boolean; motivo_anulacion: string | null; anulado_at: string | null
     documento: string | null; observacion: string | null; recibe: string | null; referencia_tipo: string | null; referencia_id: string | null; almacen_id: string
+    /** salida de varios almacenes: une las salidas que se hicieron juntas (un solo ticket) */
+    grupo_id: string | null
     almacen: { nombre: string }; local: { codigo: string; nombre: string }; area: { nombre: string } | null
     movimiento_detalle: { id: string; cantidad: number; costo_unitario: number | null; fecha_vencimiento: string | null
       lote_consumo: { cantidad: number; lote: { fecha_vencimiento: string | null } | null }[]; producto: { nombre: string; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } }[] }
@@ -30,7 +32,16 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
   const suSentido: Sentido = TIPOS_DE.entrada.includes(m.tipo) ? 'entrada' : 'salida'
   if (suSentido !== sentido) redirect(`/${suSentido}s/${id}`)
 
-  const [panel, sel] = await Promise.all([getPanel(), getAlmacenActivo()])
+  type Hermana = { id: string; nro: string | null; anulado: boolean; almacen: { nombre: string }
+    movimiento_detalle: { cantidad: number; lote_consumo: { cantidad: number; lote: { fecha_vencimiento: string | null } | null }[]; producto: { nombre: string; unidad: { codigo: string } } }[] }
+  const [panel, sel, { data: grupo }] = await Promise.all([getPanel(), getAlmacenActivo(),
+    // las salidas hechas junto con esta en los otros almacenes (mismo ticket)
+    m.grupo_id
+      ? supabase.from('movimiento').select('id, nro, anulado, almacen:almacen_id(nombre), movimiento_detalle(cantidad, lote_consumo(cantidad, lote:lote_id(fecha_vencimiento)), producto:producto_id(nombre, unidad:unidad_id(codigo)))')
+          .eq('grupo_id', m.grupo_id).eq('anulado', false).order('nro')
+      : Promise.resolve({ data: null })])
+  const hermanas = ((grupo ?? []) as unknown as Hermana[])
+  const corto = (n: string) => n.replace(/\s*—.*$/, '')
   const ruta = sentido === 'entrada' ? '/entradas' : '/salidas'
   const puedeAnular = panel === 'almacen' && !soloConsulta(sel) && !m.anulado && (m.referencia_tipo === 'manual' || !m.referencia_tipo) && m.tipo !== 'stock_inicial'
   const total = m.movimiento_detalle.reduce((s, d) => s + Number(d.cantidad) * Number(d.costo_unitario ?? 0), 0)
@@ -43,6 +54,10 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
   const hayVence = m.movimiento_detalle.some((d) => vence(d))
   const origen = m.referencia_tipo === 'compra' ? `/compras/${m.referencia_id}` : m.referencia_tipo === 'traslado' ? `/traslados/${m.referencia_id}` : null
   const conTicket = m.tipo === 'salida_consumo' && !m.anulado
+  // el ticket: con varias salidas juntas, todos sus productos (con su almacén) y todos los números
+  const delTicket = hermanas.length > 1 ? hermanas : [{ ...m, movimiento_detalle: m.movimiento_detalle }]
+  const vencioDe = (d: { lote_consumo: M['movimiento_detalle'][number]['lote_consumo'] }) =>
+    d.lote_consumo.filter((c) => c.lote?.fecha_vencimiento).map((c) => fmtDate(c.lote!.fecha_vencimiento) + (d.lote_consumo.length > 1 ? ` (${fmtQty(c.cantidad)})` : '')).join(' · ')
 
   const datos: [string, React.ReactNode][] = [
     ['Fecha', fmtDate(m.fecha, true)],
@@ -60,9 +75,14 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
         actions={<>
           {conTicket && (
             <TicketButton auto={imprimir} label="Imprimir ticket" data={{
-              logo: LOGO_DOC[m.local.codigo], negocio: m.local.nombre, titulo: 'Comprobante de salida de almacén', numero: m.nro ?? '',
-              datos: [['Fecha', fmtDate(m.fecha, true)], ['Almacén', m.almacen.nombre], ['Área destino', m.area?.nombre ?? '—']],
-              items: m.movimiento_detalle.map((d) => ({ descripcion: d.producto.nombre + (vence(d) ? ` · Vence ${vence(d)}` : ''), cantidad: fmtQty(d.cantidad), unidad: d.producto.unidad.codigo })),
+              logo: LOGO_DOC[m.local.codigo], negocio: m.local.nombre, titulo: 'Comprobante de salida de almacén',
+              numero: delTicket.map((h) => h.nro ?? '').join(' · '),
+              datos: [['Fecha', fmtDate(m.fecha, true)],
+                hermanas.length > 1 ? ['Almacenes', delTicket.map((h) => `${corto(h.almacen.nombre)} ${h.nro ?? ''}`).join(' · ')] : ['Almacén', m.almacen.nombre],
+                ['Área destino', m.area?.nombre ?? '—']],
+              items: delTicket.flatMap((h) => h.movimiento_detalle.map((d) => ({
+                descripcion: d.producto.nombre + (hermanas.length > 1 ? ` (${corto(h.almacen.nombre)})` : '') + (vencioDe(d) ? ` · Vence ${vencioDe(d)}` : ''),
+                cantidad: fmtQty(d.cantidad), unidad: d.producto.unidad.codigo }))),
               observacion: m.observacion, firmas: [{ nombre: m.recibe, etiqueta: 'Recibí conforme' }],
             }} />
           )}
@@ -73,6 +93,11 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
             </AnularConMotivo>
           )}
         </>} />
+      {hermanas.length > 1 && (
+        <div className="mb-4"><Note>Se registró junto con {hermanas.filter((h) => h.id !== m.id).map((h, i) => (
+          <span key={h.id}>{i > 0 && ', '}<Link href={`/salidas/${h.id}`} className="enlace">{h.nro}</Link> ({corto(h.almacen.nombre)})</span>
+        ))}: el ticket para firmar lleva los productos de todas.</Note></div>
+      )}
       {m.anulado && <div className="mb-4"><Note tone="warn">Anulada el {fmtDate(m.anulado_at, true)}{m.motivo_anulacion ? <>. Motivo: <b>{m.motivo_anulacion}</b></> : ''}. El stock fue revertido.</Note></div>}
       <Section title="Datos" className="mb-5">
         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-3">

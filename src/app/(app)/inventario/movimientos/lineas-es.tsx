@@ -3,11 +3,14 @@
 import { LineItems } from '@/components/line-items'
 
 /** Productos de una entrada (con vencimiento si el producto lo controla) o de una salida (con su stock a la vista). */
-export function LineasEntradaSalida({ almacenId, entrada }: { almacenId: string; entrada: boolean }) {
+export function LineasEntradaSalida({ almacenId, almacenes, entrada }: { almacenId: string | null; entrada: boolean
+  /** salida de varios almacenes: se busca en todos y cada producto lleva su almacén */
+  almacenes?: string[] }) {
   return (
     <LineItems
       name="lineas"
       almacenId={almacenId}
+      almacenes={almacenes}
       mostrarStock={!entrada}
       mostrarVence={!entrada}
       topeStock={!entrada}
