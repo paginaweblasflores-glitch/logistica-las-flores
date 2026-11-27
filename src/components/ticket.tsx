@@ -44,13 +44,15 @@ export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: 
     // la hoja del ticket (80 mm, sin márgenes) se impone para TODA la impresión mientras dura: algunos navegadores
     // no aplican la «página con nombre» (@page ticket) y usaban la hoja A4 del sistema, achicando el ticket y
     // agregando fecha y título de la pestaña. Sin márgenes, el navegador tampoco imprime esos encabezados.
-    let hoja = document.getElementById('hoja-ticket')
-    if (!hoja) {
-      hoja = document.createElement('style')
-      hoja.id = 'hoja-ticket'
-      hoja.textContent = '@page { size: 80mm auto !important; margin: 0 !important; } @media print { html, body { width: 80mm !important; } }'
-      document.head.appendChild(hoja)
-    }
+    // «80mm auto» NO es válido en CSS: varios Chrome lo descartan y arman la hoja en A4 (la de las demás impresiones)
+    // y luego la achican al rollo: el ticket salía diminuto y al centro. Se mide el alto real del ticket y se da
+    // una medida exacta (80 mm × alto), que todos los navegadores respetan.
+    const alto = altoTicketMm()
+    document.getElementById('hoja-ticket')?.remove()
+    const hoja = document.createElement('style')
+    hoja.id = 'hoja-ticket'
+    hoja.textContent = `@page { size: 80mm ${alto}mm; margin: 0; } @page ticket { size: 80mm ${alto}mm; margin: 0; } @media print { html, body { width: 80mm !important; } }`
+    document.head.appendChild(hoja)   // al final del <head>: gana sobre la hoja A4 de globals.css
     const fin = () => {
       html.classList.remove('imprimiendo-ticket'); document.getElementById('hoja-ticket')?.remove(); window.removeEventListener('afterprint', fin)
     }
@@ -85,6 +87,18 @@ export function TicketButton({ data, auto = false, label = 'Imprimir ticket' }: 
       {listo && createPortal(<Ticket data={data} />, document.body)}
     </>
   )
+}
+
+/** Alto del ticket en mm (se dibuja un momento fuera de la pantalla, con el ancho y la letra de la impresión). */
+function altoTicketMm() {
+  const t = document.querySelector<HTMLElement>('.ticket-portal')
+  if (!t) return 200
+  const antes = t.getAttribute('style')
+  t.setAttribute('style', 'display:block;position:absolute;left:-10000px;top:0;width:64mm;padding:0 0 0 6mm;font-family:system-ui,Arial,sans-serif;font-size:11px;font-weight:700')
+  const px = t.getBoundingClientRect().height
+  if (antes === null) t.removeAttribute('style'); else t.setAttribute('style', antes)
+  // px → mm (96 px = 25,4 mm) y 4 mm de margen por redondeos
+  return Math.max(60, Math.ceil((px * 25.4) / 96) + 4)
 }
 
 function Ticket({ data }: { data: TicketData }) {
