@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Boxes, ScrollText } from 'lucide-react'
+import { Boxes, ScrollText, ClipboardCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { AjustarStock } from './ajustar'
@@ -111,7 +111,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   return (
     <>
       {/* entradas y salidas se registran en sus propios módulos */}
-      <PageHeader title={`Stock actual${sel.actual ? ` · ${sel.actual.corto}` : ''}`} />
+      {/* la hoja para el conteo físico (PDF con el stock de este momento); las diferencias se corrigen con «Ajustar» */}
+      <PageHeader title={`Stock actual${sel.actual ? ` · ${sel.actual.corto}` : ''}`}
+        actions={<LinkButton href={`/inventario/conteo${almacen ? `?almacen=${almacen}` : ''}`} variant="outline"><ClipboardCheck className="size-4" /> Hoja de conteo</LinkButton>} />
 
       {alerta && !estado && (
         <div className="mb-4"><Note tone="warn">Mostrando solo los productos que llegaron a su <b>stock mínimo</b> (por acabarse o agotados). El mínimo se cambia en la ficha de cada producto (haga clic en su nombre). <Link href="/inventario" className="enlace">Ver todo el stock</Link></Note></div>
