@@ -25,7 +25,9 @@ export type ProductoLite = { id: string; codigo: string; nombre: string; unidad:
  * - Con `name`: funciona dentro de formularios (input oculto con el id).
  * - Con `onSelect`: se usa en editores de líneas.
  */
-export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Buscar producto…', tipos, className, autoFocus, almacenId, almacenes }: {
+export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Buscar producto…', tipos, className, autoFocus, almacenId, almacenes, sinStockNo = false }: {
+  /** salidas y traspasos: lo que está en 0 se ve pero no se puede elegir (no hay nada que sacar) */
+  sinStockNo?: boolean
   /** panel de almacén: busca solo los productos de ESE almacén y muestra su código propio */
   almacenId?: string | null
   /** salida de varios almacenes: busca en todos ellos; cada fila es un producto EN un almacén (se elige de cuál sale) */
@@ -80,7 +82,9 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
 
   useCerrarFuera(boxRef, open, () => setOpen(false))
 
+  const bloqueado = (p: ProductoLite) => sinStockNo && !((p.stock ?? 0) > 0)
   function choose(p: ProductoLite) {
+    if (bloqueado(p)) return
     if (onSelect) { onSelect(p); setTerm(''); setResults([]); setOpen(false); setBuscarTodo(0); return }
     setSelected(p); setOpen(false); setTerm('')
   }
@@ -129,12 +133,14 @@ export function ProductPicker({ name, onSelect, defaultValue, placeholder = 'Bus
           {results.map((p, i) => (
             <li key={`${p.id}-${p.almacen_id ?? ''}`} role="option" aria-selected={i === active}
                 onMouseDown={(e) => { e.preventDefault(); choose(p) }}
-                onMouseEnter={() => setActive(i)}
-                className={cn('flex cursor-pointer items-center gap-3 px-3 py-2 text-sm', i === active && 'bg-brand-50')}>
+                onMouseEnter={() => setActive(i)} aria-disabled={bloqueado(p)}
+                title={bloqueado(p) ? 'Sin stock: no se puede sacar' : undefined}
+                className={cn('flex items-center gap-3 px-3 py-2 text-sm', bloqueado(p) ? 'cursor-not-allowed opacity-55' : 'cursor-pointer', i === active && !bloqueado(p) && 'bg-brand-50')}>
               <ProductoFoto src={p.imagen_url} alt="" />
               <span className="min-w-0">
                 <span className="block font-medium"><span className="mr-1.5 font-mono text-xs font-semibold text-ink-700">{almacenId || p.almacen ? `Cód. ${p.codigo}` : p.codigo}</span><Resaltado texto={p.nombre} busqueda={term} /></span>
-                <span className="text-xs text-muted">{p.almacen && <b className="text-ink-700">{p.almacen} · </b>}{p.unidad}{almacenId || p.almacen ? <> · Stock: <b className={!p.stock || p.stock <= 0 ? 'text-brand-700' : 'text-ink-900'}>{p.stock === null || p.stock === undefined ? 'sin cantidad' : p.stock.toLocaleString('es-PE', { maximumFractionDigits: 3 })}</b></> : <> · {p.tipo}</>}</span>
+                <span className="text-xs text-muted">{p.almacen && <b className="text-ink-700">{p.almacen} · </b>}{p.unidad}{almacenId || p.almacen ? <> · Stock: <b className={!p.stock || p.stock <= 0 ? 'text-brand-700' : 'text-ink-900'}>{p.stock === null || p.stock === undefined ? 'sin cantidad' : p.stock.toLocaleString('es-PE', { maximumFractionDigits: 3 })}</b></> : <> · {p.tipo}</>}
+                  {bloqueado(p) && <b className="text-brand-700"> · Sin stock: no se puede sacar</b>}</span>
               </span>
             </li>
           ))}

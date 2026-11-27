@@ -180,7 +180,7 @@ export function LineItems({ name, fields, tipos, totalKey, priceKey, allowFreeTe
     <div className="space-y-3">
       <input type="hidden" name={name} value={JSON.stringify(serializadas)} />
       <div className="flex flex-wrap gap-2">
-        <ProductPicker onSelect={add} tipos={tipos} almacenId={almacenId} almacenes={almacenes} className="min-w-72 flex-1" placeholder="Agregar producto: escriba nombre o código…" />
+        <ProductPicker onSelect={add} tipos={tipos} almacenId={almacenId} almacenes={almacenes} sinStockNo={topeStock} className="min-w-72 flex-1" placeholder="Agregar producto: escriba nombre o código…" />
         {herramientas?.(agregarVarios)}
         {allowFreeText && (
           <div className="flex min-w-72 flex-1 gap-2">
