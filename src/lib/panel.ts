@@ -31,9 +31,10 @@ const SOLO_ALMACEN = ['/entradas/nueva', '/salidas/nueva', '/traslados/nuevo', '
 
 const coincide = (path: string, base: string) => path === base || path.startsWith(base + '/')
 
-/** La contadora: su inicio, las carpetas, la ficha de cada compra (con su OC y su nota de ingreso) y los proveedores (consulta). */
+/** La contadora: su inicio, las carpetas, la ficha de cada compra (con su OC y su nota de ingreso), los proveedores (consulta)
+ *  y el Informe al Directorio. */
 const esDeContabilidad = (path: string) =>
-  path === '/' || coincide(path, '/carpetas')
+  path === '/' || coincide(path, '/carpetas') || coincide(path, '/reportes/directorio')
   || (path.startsWith('/compras/') && !coincide(path, '/compras/nueva'))
   || (path.startsWith('/entradas/') && !coincide(path, '/entradas/nueva'))
   || (coincide(path, '/proveedores') && !coincide(path, '/proveedores/nuevo'))

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Boxes, ShoppingCart, BarChart3, Settings,
-  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, FolderOpen, Building2, type LucideIcon,
+  ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine, ClipboardList, Package, FilePlus2, FolderOpen, Building2, Landmark, type LucideIcon,
 } from 'lucide-react'
 import type { Panel } from '@/lib/panel'
 import { ENVIO_STOCK_DIA } from '@/lib/stock-dia'
@@ -78,6 +78,7 @@ export const NAV_CONTABILIDAD: NavModule[] = [
   { label: 'Inicio', icon: LayoutDashboard, href: '/' },
   { label: 'Carpetas de compra', icon: FolderOpen, href: '/carpetas' },
   { label: 'Proveedores', icon: Building2, href: '/proveedores' },
+  { label: 'Informe al Directorio', icon: Landmark, href: '/reportes/directorio' },
 ]
 
 export const navDe = (panel: Panel) =>

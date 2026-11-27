@@ -1,11 +1,11 @@
-import { BarChart3, Scale, ShoppingCart, ClipboardCheck, UserPlus } from 'lucide-react'
+import { BarChart3, Scale, ShoppingCart, ClipboardCheck, UserPlus, Landmark } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel } from '@/lib/session'
 import { ReportesAlmacen } from './reportes-almacen'
 import { resolverPeriodo } from '@/lib/periodo'
 import { fmtDate, fmtPct, fmtSoles, MESES, MESES_CORTO } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { PageHeader, Section, Table, Th, Td, Badge, Note } from '@/components/ui'
+import { PageHeader, Section, Table, Th, Td, Badge, Note, LinkButton } from '@/components/ui'
 import { PeriodoSelector } from '@/components/periodo-selector'
 import { Bars } from '@/components/charts'
 import { ReportExport, type Hoja } from '@/components/report-export'
@@ -69,7 +69,10 @@ export default async function ReportesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Reportes e indicadores"
         description={<>Indicadores oficiales del MOF y comparativo entre negocios · {local ? local.nombre : 'Global'} · {fmtDate(periodo.desde)} – {fmtDate(periodo.hasta)}</>}
-        actions={<><PeriodoSelector actual={periodo.key} desde={periodo.desde} hasta={periodo.hasta} /><ReportExport archivo={`reporte_logistica_${periodo.desde}_${periodo.hasta}`} hojas={hojas} /></>} />
+        actions={<>
+          {/* las compras del mes de cada empresa, para el directorio (PDF + anexo en Excel) */}
+          <LinkButton href="/reportes/directorio" variant="outline"><Landmark className="size-4" /> Informe al Directorio</LinkButton>
+          <PeriodoSelector actual={periodo.key} desde={periodo.desde} hasta={periodo.hasta} /><ReportExport archivo={`reporte_logistica_${periodo.desde}_${periodo.hasta}`} hojas={hojas} /></>} />
 
       <Section icon={Scale} title="Comparativo entre negocios" className="mb-5" bodyClassName="p-0">
         <Table>
