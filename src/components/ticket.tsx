@@ -22,7 +22,8 @@ export type TicketData = {
   firmas: { nombre?: string | null; etiqueta: string }[]
 }
 
-const linea = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '11px', lineHeight: '1.5' } as const
+// letra grande: el texto ocupa casi todo el ancho del papel
+const linea = { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '13.5px', lineHeight: '1.45' } as const
 const bloque = { borderBottom: '1px dashed #000', paddingBottom: '6px', marginBottom: '6px' } as const
 
 /** Botón «Imprimir ticket»; con `auto` se imprime solo al abrir (recién registrado). */
@@ -93,10 +94,10 @@ function Ticket({ data }: { data: TicketData }) {
   return (
     <div className="ticket-portal">
       <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '6px', marginBottom: '6px' }}>
-        {data.logo && <img src={data.logo} alt="" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />}
-        <div style={{ fontSize: '13px' }}>{data.negocio}</div>
-        <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: '2px' }}>{data.titulo}</div>
-        <div style={{ fontSize: '12px', marginTop: '3px' }}>N° {data.numero}</div>
+        {data.logo && <img src={data.logo} alt="" style={{ width: '54px', height: '54px', objectFit: 'contain', display: 'block', margin: '0 auto 4px' }} />}
+        <div style={{ fontSize: '17px' }}>{data.negocio}</div>
+        <div style={{ fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '2px' }}>{data.titulo}</div>
+        <div style={{ fontSize: '15px', marginTop: '3px' }}>N° {data.numero}</div>
       </div>
       <div style={bloque}>
         {data.datos.map(([k, v]) => (
@@ -104,7 +105,7 @@ function Ticket({ data }: { data: TicketData }) {
         ))}
       </div>
       <div style={bloque}>
-        <div style={{ ...linea, fontSize: '10px', textTransform: 'uppercase', borderBottom: '1px solid #000', paddingBottom: '3px', marginBottom: '4px' }}>
+        <div style={{ ...linea, fontSize: '12px', textTransform: 'uppercase', borderBottom: '1px solid #000', paddingBottom: '3px', marginBottom: '4px' }}>
           <span>Producto</span><span style={{ flexShrink: 0 }}>Cant.</span>
         </div>
         {data.items.map((it, i) => (
@@ -117,17 +118,20 @@ function Ticket({ data }: { data: TicketData }) {
       </div>
       {data.observacion && (
         <div style={bloque}>
-          <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Observación</div>
-          <div style={{ fontSize: '11px', lineHeight: '1.5', overflowWrap: 'break-word' }}>{data.observacion}</div>
+          <div style={{ fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Observación</div>
+          <div style={{ fontSize: '13.5px', lineHeight: '1.45', overflowWrap: 'break-word' }}>{data.observacion}</div>
         </div>
       )}
-      {data.firmas.map((f, i) => (
-        <div key={i} style={{ textAlign: 'center', paddingTop: '55px' }}>
-          <div style={{ borderTop: '1px solid #000', width: '70%', margin: '0 auto 4px' }} />
-          {f.nombre && <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>{f.nombre}</div>}
-          <div style={{ fontSize: '9px' }}>{f.etiqueta}</div>
-        </div>
-      ))}
+      {/* firmas: con dos (entregado por · recibí conforme), una al lado de la otra */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.firmas.length}, 1fr)`, gap: '10px' }}>
+        {data.firmas.map((f, i) => (
+          <div key={i} style={{ textAlign: 'center', paddingTop: '55px' }}>
+            <div style={{ borderTop: '1px solid #000', width: data.firmas.length > 1 ? '92%' : '70%', margin: '0 auto 4px' }} />
+            {f.nombre && <div style={{ fontSize: data.firmas.length > 1 ? '12px' : '14px', fontWeight: 700, textTransform: 'uppercase', overflowWrap: 'break-word' }}>{f.nombre}</div>}
+            <div style={{ fontSize: '11.5px' }}>{f.etiqueta}</div>
+          </div>
+        ))}
+      </div>
       <br /><br /><br /><br /><br />
     </div>
   )

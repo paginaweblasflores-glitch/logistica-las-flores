@@ -16,7 +16,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
   const supabase = await createClient()
   const { data } = await supabase.from('movimiento')
     .select(`id, nro, fecha, tipo, anulado, motivo_anulacion, anulado_at, documento, observacion, recibe, referencia_tipo, referencia_id, almacen_id, grupo_id,
-             almacen:almacen_id(nombre), local:local_id(codigo, nombre), area:area_id(nombre),
+             almacen:almacen_id(nombre), local:local_id(codigo, nombre, oc_elaborado_por), area:area_id(nombre),
              movimiento_detalle(id, cantidad, costo_unitario, fecha_vencimiento, lote_consumo(cantidad, lote:lote_id(fecha_vencimiento)), producto:producto_id(nombre, unidad:unidad_id(codigo), alm:producto_almacen(almacen_id, codigo)))`)
     .eq('id', id).maybeSingle()
   if (!data) notFound()
@@ -24,7 +24,7 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
     documento: string | null; observacion: string | null; recibe: string | null; referencia_tipo: string | null; referencia_id: string | null; almacen_id: string
     /** salida de varios almacenes: une las salidas que se hicieron juntas (un solo ticket) */
     grupo_id: string | null
-    almacen: { nombre: string }; local: { codigo: string; nombre: string }; area: { nombre: string } | null
+    almacen: { nombre: string }; local: { codigo: string; nombre: string; oc_elaborado_por: string | null }; area: { nombre: string } | null
     movimiento_detalle: { id: string; cantidad: number; costo_unitario: number | null; fecha_vencimiento: string | null
       lote_consumo: { cantidad: number; lote: { fecha_vencimiento: string | null } | null }[]; producto: { nombre: string; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } }[] }
   const m = data as unknown as M
@@ -83,7 +83,8 @@ export async function DetalleMovimiento({ id, sentido, imprimir }: { id: string;
               items: delTicket.flatMap((h) => h.movimiento_detalle.map((d) => ({
                 descripcion: d.producto.nombre + (hermanas.length > 1 ? ` (${corto(h.almacen.nombre)})` : '') + (vencioDe(d) ? ` · Vence ${vencioDe(d)}` : ''),
                 cantidad: fmtQty(d.cantidad), unidad: d.producto.unidad.codigo }))),
-              observacion: m.observacion, firmas: [{ nombre: m.recibe, etiqueta: 'Recibí conforme' }],
+              // entrega el almacenero del negocio (Configuración → Firmas) y recibe quien retira
+              observacion: m.observacion, firmas: [{ nombre: m.local.oc_elaborado_por, etiqueta: 'Entregado por' }, { nombre: m.recibe, etiqueta: 'Recibí conforme' }],
             }} />
           )}
           {puedeAnular && (
