@@ -24,12 +24,14 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
     supabase.from('cotizacion_oferta').select('id, ronda, fecha, canal, observacion, proveedor_id, proveedor:proveedor_id(razon_social), cotizacion_precio(item_id, precio_unitario, precio_unidad)').eq('cotizacion_id', id),
     getProveedores(),
     supabase.from('compra').select('id, numero, estado, oferta_id').eq('cotizacion_id', id).neq('estado', 'anulada'),
-    supabase.from('cotizacion').select('requerimiento:requerimiento_id(origen)').eq('id', id).maybeSingle(),
+    supabase.from('cotizacion').select('requerimiento:requerimiento_id(origen), consolidado:consolidado_id(id, numero)').eq('id', id).maybeSingle(),
     // lo que cada proveedor ya cotizó por estos productos (en cotizaciones anteriores)
     supabase.rpc('fn_cotizaciones_anteriores', { p_cotizacion: id }),
   ])
   // del requerimiento del almacén: «Comprado» sin precios (los pone el almacén con la boleta)
   const delAlmacen = (origenRow?.requerimiento as unknown as { origen: string } | null)?.origen === 'almacen'
+  // hecha desde el requerimiento juntado (RL): no se «compra» aquí; con el ganador, el pedido se envía desde el RL
+  const rl = (origenRow?.consolidado as unknown as { id: string; numero: string } | null) ?? null
   if (!c) notFound()
   type Of = { id: string; ronda: number; fecha: string; canal: string | null; observacion: string | null; proveedor_id: string; proveedor: { razon_social: string }; cotizacion_precio: { item_id: string; precio_unitario: number; precio_unidad: number | null }[] }
   const its = (items ?? []) as { id: string; descripcion: string; cantidad: number; unidad: string | null; producto_id: string | null; oferta_ganadora_id: string | null
@@ -71,11 +73,12 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
     <>
       <PageHeader title={`Cotización ${c.numero}`} back={{ href: '/cotizaciones', label: 'Cotizaciones' }} description={`${c.titulo} · ${fmtDate(c.fecha)}`}
         actions={<><EstadoBadge estado={c.estado} />
+          {rl && <LinkButton href={`/requerimientos/rl/${rl.id}`} variant="outline">Enviar el pedido desde {rl.numero}</LinkButton>}
           {delAlmacen && pendientes > 0 && (
             <ActionForm action={comprarDesdeCotizacion}><input type="hidden" name="cotizacion_id" value={id} />
               <SubmitButton confirm={partes.length > 1 ? `¿Marcar como comprado? Se registran ${partes.length} compras (una por proveedor). El almacén las verá en Entradas y pondrá los precios de la boleta.` : '¿Marcar como comprado? El almacén la verá en Entradas y pondrá los precios de la boleta.'}>Comprar</SubmitButton></ActionForm>
           )}
-          {!delAlmacen && partes.length === 1 && !partes[0].compra && <LinkButton href={`/compras/nueva?cotizacion=${id}&oferta=${partes[0].oferta.id}`}>Generar compra</LinkButton>}
+          {!delAlmacen && !rl && partes.length === 1 && !partes[0].compra && <LinkButton href={`/compras/nueva?cotizacion=${id}&oferta=${partes[0].oferta.id}`}>Generar compra</LinkButton>}
           {partes.length === 1 && partes[0].compra && <LinkButton href={`/compras/${partes[0].compra.id}`} variant="outline">Ver compra {partes[0].compra.numero}</LinkButton>}</>} />
 
       {/* Indicadores según el paso: abierta = cómo va la comparación; adjudicada = resultado y compras */}
@@ -124,6 +127,7 @@ export default async function CotizacionPage({ params }: { params: Promise<{ id:
                     <Td right className="font-semibold tabular">{fmtSoles(p * Number(i.cantidad))}</Td>
                     <Td className="no-print">{compra
                       ? <Link href={`/compras/${compra.id}`} className="enlace">{compra.numero}</Link>
+                      : rl ? <span className="text-xs text-muted">Enviar desde {rl.numero}</span>
                       : delAlmacen ? <span className="text-xs text-muted">Por marcar como comprado</span>
                       : <LinkButton href={`/compras/nueva?cotizacion=${id}&oferta=${o.id}`} size="sm">Generar compra</LinkButton>}</Td>
                   </tr>

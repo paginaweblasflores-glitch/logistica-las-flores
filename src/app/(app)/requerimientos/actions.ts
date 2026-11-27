@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { run, afecto, check, enUnaOperacion, type ActionResult } from '@/lib/actions'
-import { parseLines, num, limaIso } from '@/lib/lines'
+import { parseLines, num } from '@/lib/lines'
+import { agruparLineas } from '@/lib/juntado'
 
 export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
@@ -66,20 +67,6 @@ export async function crearRequerimientoAlmacen(_: ActionResult, fd: FormData): 
     if (error) throw error
     revalidatePath('/requerimientos')
     redirect(`/requerimientos/${data}`)
-  })
-}
-
-/** Fernanda lo marca «Comprado» (requerimiento del almacén): elige el proveedor; NO pone precios. */
-export async function comprarRequerimientoAlmacen(_: ActionResult, fd: FormData): Promise<ActionResult> {
-  return run(async () => {
-    // sin proveedor: lo pone el almacén con la boleta al registrar la llegada
-    const supabase = await createClient()
-    check(await supabase.rpc('fn_comprar_requerimiento_almacen', {
-      p_requerimiento: String(fd.get('id')), p_proveedor: null, p_fecha_compromiso: limaIso(fd.get('fecha_compromiso')),
-    }))
-    revalidatePath('/requerimientos', 'layout')
-    revalidatePath('/compras', 'layout')
-    return { message: 'Marcado como comprado: el almacén registrará la llegada con la boleta.' }
   })
 }
 
@@ -156,6 +143,50 @@ export async function cotizarRequerimiento(_: ActionResult, fd: FormData): Promi
       cantidad: d.cantidad_aprobada ?? d.cantidad_solicitada, unidad: d.producto?.unidad.codigo ?? d.pedida?.nombre ?? 'UND',
       ...(factor(d) !== 1 ? { factor: factor(d), unidad_pedido: d.pedida!.nombre, cantidad_pedida: Math.round(Number(d.cantidad_aprobada ?? d.cantidad_solicitada) / factor(d) * 10000) / 10000 } : {}),
     })) },
+    ])
+    revalidatePath('/requerimientos', 'layout')
+    redirect(`/cotizaciones/${ids.cot}`)
+  })
+}
+
+/** RL: Logística marca (o desmarca) como enviados al proveedor los productos de la imagen / PDF que descargó */
+export async function marcarEnviados(lineas: string[], enviado = true): Promise<ActionResult> {
+  return run(async () => {
+    if (!lineas.length) return { error: 'No hay productos marcados.' }
+    const supabase = await createClient()
+    check(await supabase.rpc('fn_marcar_enviados', { p_detalles: lineas, p_enviado: enviado }))
+    revalidatePath('/requerimientos', 'layout')
+    return { message: enviado ? 'Marcados como enviados.' : 'Se quitó la marca de enviado.' }
+  })
+}
+
+/**
+ * RL: «Solicitar cotización» con los productos que marcó Fernanda. Un producto pedido en varios requerimientos
+ * del día va en UNA línea con la cantidad sumada (en la unidad en que se pidió si todos la pidieron igual).
+ */
+export async function cotizarJuntado(consolidadoId: string, lineas: string[]): Promise<ActionResult> {
+  return run(async () => {
+    if (!lineas.length) return { error: 'Marque los productos que va a cotizar.' }
+    const supabase = await createClient()
+    const [{ data: rl }, { data: det }] = await Promise.all([
+      supabase.from('requerimiento_consolidado').select('numero, local_id').eq('id', consolidadoId).single(),
+      supabase.from('requerimiento_detalle')
+        .select('id, producto_id, descripcion, cantidad_solicitada, cantidad_aprobada, cantidad_pedida, unidad_pedido_id, pedida:unidad_pedido_id(nombre), producto:producto_id(unidad:unidad_id(codigo)), requerimiento:requerimiento_id(consolidado_id)')
+        .in('id', lineas),
+    ])
+    type D = { id: string; producto_id: string | null; descripcion: string; cantidad_solicitada: number; cantidad_aprobada: number | null
+      cantidad_pedida: number | null; unidad_pedido_id: string | null; pedida: { nombre: string } | null
+      producto: { unidad: { codigo: string } } | null; requerimiento: { consolidado_id: string | null } | null }
+    const ds = ((det ?? []) as unknown as D[]).filter((d) => d.requerimiento?.consolidado_id === consolidadoId)
+    if (!rl || !ds.length) return { error: 'Esos productos no son de este requerimiento. Recargue la página.' }
+    const grupos = agruparLineas(ds)
+    const ids = await enUnaOperacion(supabase, [
+      { insertar: 'cotizacion', como: 'cot', valores: { consolidado_id: consolidadoId, local_id: rl.local_id, titulo: `Requerimiento ${rl.numero}` } },
+      { insertar: 'cotizacion_item', valores: grupos.map((g) => ({
+        cotizacion_id: '@id:cot', requerimiento_detalle_id: g.lineas[0].id, producto_id: g.lineas[0].producto_id, descripcion: g.lineas[0].descripcion,
+        cantidad: g.base, unidad: g.lineas[0].producto?.unidad.codigo ?? 'UND',
+        ...(g.pedida && g.pedida.factor !== 1 ? { factor: g.pedida.factor, unidad_pedido: g.pedida.nombre, cantidad_pedida: g.pedida.cantidad } : {}),
+      })) },
     ])
     revalidatePath('/requerimientos', 'layout')
     redirect(`/cotizaciones/${ids.cot}`)

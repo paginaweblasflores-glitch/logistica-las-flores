@@ -3,10 +3,11 @@ import { ClipboardList, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
 import { fmtDate, fmtPct, fmtSoles, haceDias } from '@/lib/format'
-import { sp, cn } from '@/lib/utils'
+import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
 import { PageHeader, Section, Table, Th, Td, FilterBar, FilterField, Pagination, EmptyState, LinkButton, EstadoBadge, Badge, LocalBadge } from '@/components/ui'
 import { Select } from '@/components/select'
+import { ListaJuntados, PestanasOrigen, rlPorEnviar, estadoEnvio, EnvioBadge } from './juntados'
 
 export const metadata = { title: 'Requerimientos' }
 
@@ -28,6 +29,9 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   // (primero y por defecto «Del almacén»: es el que más requerimientos hace).
   const origen = panel === 'almacen' ? 'almacen' : panel === 'area' ? 'area' : sp(params, 'origen', 'almacen') === 'area' ? 'area' : 'almacen'
   const delAlmacen = origen === 'almacen'
+  const esLogistica = panel === 'logistica'
+  // Logística ve los del almacén JUNTADOS: un RL por negocio y día (con todos sus requerimientos)
+  if (esLogistica && delAlmacen) return <ListaJuntados params={params} />
 
   let q = supabase.from('v_requerimiento_resumen')
     .select('id, numero, created_at, estado, parcial, prioridad, local_codigo, area_nombre, almacen_nombre, solicitante, items, monto_estimado, horas_aprobacion, dentro_objetivo, fecha_requerida', { count: 'exact' })
@@ -36,25 +40,22 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
   if (panel === 'almacen' && sel.id) q = q.eq('almacen_id', sel.id)   // el almacén elegido arriba
   if (estado === 'pendientes') q = q.in('estado', PENDIENTES)
   else if (estado) q = q.eq('estado', estado)
-  const esLogistica = panel === 'logistica'
   // meta del puesto de Logística (MOF): aprobados en menos de 24 h; los demás paneles no la ven ni la consultan
   let k = supabase.from('v_requerimiento_resumen').select('dentro_objetivo').not('aprobado_at', 'is', null).gte('created_at', haceDias(90))
   if (local) k = k.eq('local_id', local.id)
   k = k.eq('origen', origen)
-  // por aprobar en cada pestaña (Logística)
-  const porAprobar = (o: string) => {
-    let x = supabase.from('requerimiento').select('id', { count: 'exact', head: true }).eq('origen', o).eq('estado', 'solicitado')
-    if (local) x = x.eq('local_id', local.id)
-    return x
-  }
-  // la lista, el indicador < 24 h y lo que falta aprobar en cada pestaña: al mismo tiempo
-  const [{ data, count }, { data: kpi }, { count: nArea }, { count: nAlmacen }] = await Promise.all([
+  // las áreas por aprobar (Logística); en la pestaña del almacén, los RL con productos por enviar
+  let porAprobar = supabase.from('requerimiento').select('id', { count: 'exact', head: true }).eq('origen', 'area').eq('estado', 'solicitado')
+  if (local) porAprobar = porAprobar.eq('local_id', local.id)
+  // la lista, el indicador < 24 h y lo pendiente de cada pestaña: al mismo tiempo
+  const [{ data, count }, { data: kpi }, { count: nArea }, nAlmacen] = await Promise.all([
     q.order('created_at', { ascending: false }).range(from, to), esLogistica ? k : Promise.resolve({ data: null }),
-    esLogistica ? porAprobar('area') : Promise.resolve({ count: 0 }),
-    esLogistica ? porAprobar('almacen') : Promise.resolve({ count: 0 }),
+    esLogistica ? porAprobar : Promise.resolve({ count: 0 }),
+    esLogistica ? rlPorEnviar(local?.id) : Promise.resolve(0),
   ])
+  // el almacén ve si sus requerimientos ya se enviaron al proveedor (segundo viaje, solo con los de esta página)
+  const envio = delAlmacen && data?.length ? await estadoEnvio((data as { id: string }[]).map((r) => r.id)) : new Map<string, 'si' | 'parcial' | 'no'>()
   const puedeCrear = panel !== 'logistica' && !(panel === 'almacen' && soloConsulta(sel))
-  const tabs = [{ id: 'almacen', nombre: 'Del almacén', n: nAlmacen ?? 0 }, { id: 'area', nombre: 'De áreas', n: nArea ?? 0 }]
   const pct = kpi?.length ? kpi.filter((x) => x.dentro_objetivo).length / kpi.length : null
   // con un almacén elegido, la columna «Almacén» repetiría lo mismo en cada fila
   const colLugar = !(panel === 'almacen' && sel.id)
@@ -66,16 +67,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
     <>
       <PageHeader title="Requerimientos"
         actions={puedeCrear ? <LinkButton href="/requerimientos/nuevo"><Plus className="size-4" /> Nuevo requerimiento</LinkButton> : undefined} />
-      {esLogistica && (
-        <nav aria-label="Origen del requerimiento" className="mb-5 flex flex-wrap gap-1 border-b border-line">
-          {tabs.map((t) => (
-            <Link key={t.id} href={`/requerimientos?origen=${t.id}`} aria-current={t.id === origen ? 'page' : undefined}
-              className={cn('-mb-px flex items-center gap-2 border-b-2 px-3.5 py-2.5 text-sm transition-colors', t.id === origen ? 'border-brand-600 font-bold text-ink-900' : 'border-transparent font-semibold text-muted hover:border-line-strong hover:text-ink-900')}>
-              {t.nombre}{t.n > 0 && <span className="rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-800 tabular" title="Por aprobar">{t.n}</span>}
-            </Link>
-          ))}
-        </nav>
-      )}
+      {esLogistica && <PestanasOrigen origen={origen} nAlmacen={nAlmacen} nArea={nArea ?? 0} />}
       <FilterBar>
         {esLogistica && <input type="hidden" name="origen" value={origen} />}
         <FilterField label="Estado"><Select name="estado" options={ESTADOS} defaultValue={estado} placeholder="Todos" /></FilterField>
@@ -86,7 +78,7 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
           <>
             <Table>
               <thead><tr><Th>N°</Th><Th>Solicitado</Th>{colLugar && <Th>{delAlmacen ? 'Almacén' : 'Negocio / área'}</Th>}
-                {!delAlmacen && <><Th>Solicitante</Th><Th>Prioridad</Th></>}<Th right>Ítems</Th>{!delAlmacen && <Th right>Estimado</Th>}<Th>Aprobación</Th><Th>Estado</Th></tr></thead>
+                {!delAlmacen && <><Th>Solicitante</Th><Th>Prioridad</Th></>}<Th right>Ítems</Th>{!delAlmacen && <><Th right>Estimado</Th><Th>Aprobación</Th></>}<Th>Estado</Th></tr></thead>
               <tbody>{(data as Row[]).map((r) => (
                 <tr key={r.id} className="hover:bg-canvas/60">
                   <Td><Link href={`/requerimientos/${r.id}`} className="enlace">{r.numero}</Link></Td>
@@ -94,9 +86,12 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
                   {colLugar && <Td><LocalBadge codigo={r.local_codigo} /><span className="block text-xs text-muted">{(delAlmacen ? r.almacen_nombre : r.area_nombre) ?? '—'}</span></Td>}
                   {!delAlmacen && <><Td>{r.solicitante}</Td><Td><EstadoBadge estado={r.prioridad} /></Td></>}
                   <Td right>{r.items}</Td>
-                  {!delAlmacen && <Td right>{fmtSoles(r.monto_estimado)}</Td>}
-                  <Td>{r.horas_aprobacion === null ? <span className="text-xs text-muted">pendiente</span> : <Badge tone={r.dentro_objetivo ? 'green' : 'red'}>{r.horas_aprobacion} h</Badge>}</Td>
-                  <Td>{r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : <EstadoBadge estado={r.estado} />}</Td>
+                  {!delAlmacen && <>
+                    <Td right>{fmtSoles(r.monto_estimado)}</Td>
+                    <Td>{r.horas_aprobacion === null ? <span className="text-xs text-muted">pendiente</span> : <Badge tone={r.dentro_objetivo ? 'green' : 'red'}>{r.horas_aprobacion} h</Badge>}</Td>
+                  </>}
+                  <Td>{r.parcial ? <Badge tone="amber">Atendido parcial</Badge>
+                    : delAlmacen && r.estado === 'aprobado' ? <EnvioBadge envio={envio.get(r.id) ?? 'no'} /> : <EstadoBadge estado={r.estado} />}</Td>
                 </tr>
               ))}</tbody>
             </Table>

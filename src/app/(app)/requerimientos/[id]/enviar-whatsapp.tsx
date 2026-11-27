@@ -131,16 +131,18 @@ export function EnviarWhatsApp(d: Datos) {
   }
 
   async function enviar() {
+    const ids = filas.map((f) => f.id)
+    if (sel?.confirmar && !sel.confirmar(ids)) return
     setOcupado(true); setAviso(null)
     try {
       const blob = await dibujar({ ...d, filas })
       const archivo = new File([blob], `Pedido_${d.referencia}.png`, { type: 'image/png' })
-      if (!celular) return descargar(blob, archivo.name)
+      if (!celular) { descargar(blob, archivo.name); sel?.alListo?.(ids); return }
       // celular: el menú de compartir; si el navegador no lo permite, se descarga
       if (navigator.canShare?.({ files: [archivo] })) {
-        try { await navigator.share({ files: [archivo], text: texto }) } catch { /* cerró el menú de compartir */ }
+        try { await navigator.share({ files: [archivo], text: texto }); sel?.alListo?.(ids) } catch { /* cerró el menú de compartir */ }
       } else {
-        descargar(blob, archivo.name)
+        descargar(blob, archivo.name); sel?.alListo?.(ids)
         setAviso('Este navegador no permite compartir: la imagen se descargó.')
       }
     } catch (e) {

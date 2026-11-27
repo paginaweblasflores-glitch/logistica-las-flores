@@ -1,21 +1,16 @@
 import Link from 'next/link'
-import Image from 'next/image'
-import { PackageCheck, Printer } from 'lucide-react'
+import { PackageCheck, Printer, Layers } from 'lucide-react'
 import { ocCompleta, totalOrden } from '@/lib/orden-compra'
-import { fmtDate, fmtQty, fmtSoles, ahoraLima, hoyLima } from '@/lib/format'
+import { fmtDate, fmtQty, fmtSoles } from '@/lib/format'
 import { PageHeader, Section, Table, Th, Td, EstadoBadge, Badge, LinkButton, Note } from '@/components/ui'
-import { ActionForm } from '@/components/action-form'
-import { SubmitButton } from '@/components/submit-button'
-import { AprobacionAlmacen } from './aprobacion-almacen'
-import { EnviarWhatsApp } from './enviar-whatsapp'
-import { Seleccion, MarcaFila, MarcaTodas, ImprimirMarcados, FilasImpresion } from './seleccion'
-import { LOGO_DOC } from '@/lib/empresa'
-import { cotizarRequerimiento, comprarRequerimientoAlmacen } from '../actions'
+import { EnvioBadge } from '../juntados'
 
 export type DetAlm = { id: string; producto_id: string | null; descripcion: string; stock_actual: number | null; cantidad_solicitada: number
   cantidad_aprobada: number | null; motivo: string | null
   /** lo pedido tal cual, en la unidad elegida (cantidad_solicitada está en la unidad del producto) */
   cantidad_pedida?: number | null; pedida?: { nombre: string } | null
+  /** Logística ya lo envió al proveedor (descargó la imagen / el PDF del RL) */
+  enviado_at?: string | null
   producto: { codigo: string; unidad: { codigo: string }; alm: { almacen_id: string; codigo: number | null }[] } | null }
 export type CompraAlm = { id: string; numero: string; estado: string; fecha: string; fecha_entrega?: string | null; tipo_documento: string | null; numero_documento: string | null
   proveedor: { razon_social: string } | null
@@ -25,20 +20,20 @@ type R = { id: string; numero: string; estado: string; parcial: boolean; almacen
   created_at: string; fecha_requerida: string | null; observacion: string | null; aprobado_at: string | null; aprobado_por: string | null }
 
 /**
- * Requerimiento del ALMACÉN (su lista para reponer stock). Fernanda aprueba, cotiza si quiere y lo marca
- * «Comprado» eligiendo el proveedor, sin precios. La llegada (cantidades reales, precio y boleta) la registra
- * el almacén en Entradas; ahí se cierra, completo o parcial.
+ * Requerimiento del ALMACÉN (su lista para reponer stock). Ya no se aprueba ni se marca «Comprado»: Logística lo
+ * trabaja JUNTADO con los demás del día en el RL (elige productos, descarga la imagen y la envía al proveedor).
+ * Aquí se ve qué se pidió y qué ya se envió; la llegada (cantidades reales, precio y boleta) la registra el
+ * almacén en Entradas.
  */
-export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, negocio }: {
+export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, consolidado }: {
   r: R; det: DetAlm[]; compras: CompraAlm[]; cots: { id: string; numero: string; estado: string }[]
-  /** el negocio del requerimiento (logo, razón social, RUC y dirección en la imagen y en la hoja impresa) */
-  negocio: { codigo: string; nombre: string; razon_social: string; ruc: string; direccion: string } | null
   gestiona: boolean; esAlmacen: boolean
+  /** el RL del día en que Logística lo trabaja */
+  consolidado: { id: string; numero: string } | null
 }) {
   const vigentes = compras.filter((c) => c.estado !== 'anulada')
   const cotVigente = cots.find((c) => c.estado !== 'anulada')
   const enCamino = vigentes.filter((c) => c.estado === 'aprobada')
-  const ahora = ahoraLima()
   // lo que llegó de cada producto (de las compras ya registradas por el almacén) y su precio de boleta
   const llego = (pid: string | null) => vigentes.filter((c) => c.estado === 'recibida')
     .flatMap((c) => c.compra_detalle.filter((d) => d.producto_id === pid)).reduce((s, d) => s + Number(d.cantidad_recibida ?? 0), 0)
@@ -49,37 +44,20 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
   const codigo = (d: DetAlm) => d.producto?.alm.find((a) => a.almacen_id === r.almacen_id)?.codigo ?? '—'
   // lo pedido tal cual (4 Paquete) y cuántas unidades del producto trae cada una
   const enPedido = (d: DetAlm) => d.cantidad_pedida != null && d.pedida && Number(d.cantidad_pedida) > 0 && Number(d.cantidad_pedida) !== Number(d.cantidad_solicitada)
-  const factor = (d: DetAlm) => (enPedido(d) ? Number(d.cantidad_solicitada) / Number(d.cantidad_pedida) : 1)
-  const unidadPedido = (d: DetAlm) => (enPedido(d) ? d.pedida!.nombre : d.producto?.unidad.codigo ?? '')
-  const aprobando = gestiona && r.estado === 'solicitado'
   const conObs = det.some((d) => d.motivo)
-  // aprobado y aún sin compra ni cotización: Fernanda compra directo («Comprado») o pide cotización
-  const porComprar = gestiona && r.estado === 'aprobado' && !vigentes.length && !cotVigente
-  // lo aprobado (para la imagen de WhatsApp y la hoja impresa) y el logo del negocio
-  const aprobadas = det.filter((d) => Number(d.cantidad_aprobada ?? d.cantidad_solicitada) > 0)
-  const logo = LOGO_DOC[negocio?.codigo ?? 'LF'] ?? LOGO_DOC.LF
-  const aprobadoTxt = (d: DetAlm) => { const a = Number(d.cantidad_aprobada ?? d.cantidad_solicitada); return enPedido(d) ? `${fmtQty(a / factor(d))} ${unidadPedido(d)}` : `${fmtQty(a)} ${d.producto?.unidad.codigo ?? ''}` }
-  // aprobado: Logística marca qué productos pide a cada proveedor (la imagen y la hoja salen con lo marcado)
-  const marcar = gestiona && ['aprobado', 'comprado'].includes(r.estado)
-  const filasDoc = aprobadas.map((d) => ({ id: d.id, producto: d.descripcion, cantidad: aprobadoTxt(d) }))
-  const empresa = negocio?.razon_social || 'CORPORACIÓN LAS FLORES S.A.C.'
+  // envío al proveedor: todos, algunos o ninguno de lo pedido
+  const pedidas = det.filter((d) => Number(d.cantidad_aprobada ?? d.cantidad_solicitada) > 0)
+  const enviadas = pedidas.filter((d) => d.enviado_at).length
+  const envio = pedidas.length && enviadas === pedidas.length ? 'si' : enviadas ? 'parcial' : 'no'
 
-  const contenido = (
+  return (
     <>
       <PageHeader title={`Requerimiento ${r.numero}`} back={{ href: '/requerimientos', label: 'Requerimientos' }}
         description={`${r.almacen_nombre ?? 'Almacén'} · pedido el ${fmtDate(r.created_at, true)}${r.fecha_requerida ? ` · para el ${fmtDate(r.fecha_requerida)}` : ''}`}
         actions={<>
-          {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : <EstadoBadge estado={r.estado} />}
-          {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
-          {/* solo con los productos marcados en la tabla (lo que va a cada proveedor) */}
-          {marcar && <>
-            <EnviarWhatsApp referencia={r.numero} empresa={empresa} ruc={negocio?.ruc ?? '—'} direccion={negocio?.direccion ?? ''} logo={logo} filas={filasDoc} />
-            <ImprimirMarcados />
-          </>}
-          {porComprar && (
-            <ActionForm action={cotizarRequerimiento}><input type="hidden" name="id" value={r.id} />
-              <SubmitButton variant="outline" confirm="¿Pasar a cotización? Se crea el cuadro comparativo con los productos aprobados.">Solicitar cotización</SubmitButton></ActionForm>
-          )}
+          {r.parcial ? <Badge tone="amber">Atendido parcial</Badge> : r.estado === 'aprobado' ? <EnvioBadge envio={envio} /> : <EstadoBadge estado={r.estado} />}
+          {/* Logística lo trabaja junto con los demás del día */}
+          {gestiona && consolidado && <LinkButton href={`/requerimientos/rl/${consolidado.id}`} variant="outline"><Layers className="size-4" /> Ver en {consolidado.numero}</LinkButton>}
           {cotVigente && <LinkButton href={`/cotizaciones/${cotVigente.id}`} variant="outline">Ver cotización {cotVigente.numero}</LinkButton>}
           {vigentes.map((c) => <LinkButton key={c.id} href={`/compras/${c.id}`} variant="outline">{vigentes.length > 1 ? 'Compra' : 'Ver compra'} {c.numero}</LinkButton>)}
           {/* la OC, cuando ya tiene proveedor y precios (Logística) */}
@@ -99,31 +77,24 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
       {r.observacion && <p className="mb-4 text-sm"><span className="text-muted">Observación:</span> {r.observacion}</p>}
 
       <Section icon={PackageCheck} title="Productos" bodyClassName="p-0"
-        stats={r.aprobado_at ? [{ label: 'Aprobado', value: fmtDate(r.aprobado_at, true) }] : []}>
-        {/* Logística aprueba aquí mismo, en las unidades en que se pidió */}
-        {aprobando ? (
-          <AprobacionAlmacen id={r.id} lineas={det.map((d) => ({ id: d.id, codigo: codigo(d), descripcion: d.descripcion, unidadProducto: d.producto?.unidad.codigo ?? '',
-            pedido: enPedido(d) ? Number(d.cantidad_pedida) : Number(d.cantidad_solicitada), unidad: unidadPedido(d), factor: factor(d), motivo: d.motivo }))} />
-        ) : (
+        stats={[{ label: 'Enviados al proveedor', value: `${enviadas} de ${pedidas.length}` }]}>
         <Table>
-          <thead><tr>{marcar && <Th className="w-12 text-center"><MarcaTodas ids={aprobadas.map((d) => d.id)} /></Th>}<Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th><Th right>Aprobado</Th>
+          <thead><tr><Th right>Cód.</Th><Th>Producto</Th><Th right>Pedido</Th><Th>Envío</Th>
             {recibido && <><Th right>Llegó</Th><Th right>Precio (boleta)</Th></>}{conObs && <Th>Observación</Th>}</tr></thead>
           <tbody>
             {det.map((d) => {
-              const aprob = d.cantidad_aprobada === null ? null : Number(d.cantidad_aprobada)
-              const pedido = aprob ?? Number(d.cantidad_solicitada)
+              const pedido = Number(d.cantidad_aprobada ?? d.cantidad_solicitada)
               const lleg = llego(d.producto_id)
               return (
-                <tr key={d.id} className={aprob === 0 ? 'text-muted line-through' : ''}>
-                  {marcar && <Td className="text-center">{aprob !== 0 && <MarcaFila id={d.id} nombre={d.descripcion} />}</Td>}
+                <tr key={d.id} className={pedido === 0 ? 'text-muted line-through' : d.enviado_at ? 'bg-leaf-50/60' : ''}>
                   <Td right className="font-mono text-xs font-semibold">{codigo(d)}</Td>
                   <Td className="font-medium">{d.descripcion} <span className="text-xs text-muted">{d.producto?.unidad.codigo}</span></Td>
-                  <Td right>{d.cantidad_pedida != null && d.pedida && Number(d.cantidad_pedida) !== Number(d.cantidad_solicitada)
-                    ? <>{fmtQty(d.cantidad_pedida)} {d.pedida.nombre}<span className="block text-[11px] text-muted">= {fmtQty(d.cantidad_solicitada)} {d.producto?.unidad.codigo}</span></>
+                  <Td right>{enPedido(d)
+                    ? <>{fmtQty(d.cantidad_pedida)} {d.pedida!.nombre}<span className="block text-[11px] text-muted">= {fmtQty(d.cantidad_solicitada)} {d.producto?.unidad.codigo}</span></>
                     : fmtQty(d.cantidad_solicitada)}</Td>
-                  <Td right className="font-semibold">{aprob === null ? '—' : enPedido(d) ? <>{fmtQty(aprob / factor(d))} {unidadPedido(d)}<span className="block text-[11px] font-normal text-muted">= {fmtQty(aprob)} {d.producto?.unidad.codigo}</span></> : fmtQty(aprob)}</Td>
+                  <Td>{pedido === 0 ? '—' : d.enviado_at ? <Badge tone="green">Enviado · {fmtDate(d.enviado_at, true)}</Badge> : <span className="text-xs text-muted">Por enviar</span>}</Td>
                   {recibido && <>
-                    <Td right className={lleg < pedido && aprob !== 0 ? 'font-semibold text-amber-700' : 'font-semibold'}>{fmtQty(lleg)}{lleg < pedido && aprob !== 0 && <span className="block text-[11px] font-normal">de {fmtQty(pedido)}</span>}</Td>
+                    <Td right className={lleg < pedido && pedido !== 0 ? 'font-semibold text-amber-700' : 'font-semibold'}>{fmtQty(lleg)}{lleg < pedido && pedido !== 0 && <span className="block text-[11px] font-normal">de {fmtQty(pedido)}</span>}</Td>
                     <Td right>{fmtSoles(precio(d.producto_id))}</Td>
                   </>}
                   {conObs && <Td className="text-xs text-muted">{d.motivo ?? ''}</Td>}
@@ -132,42 +103,16 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
             })}
             {agregados.map((d) => (
               <tr key={d.id}>
-                {marcar && <Td />}
                 <Td right className="text-muted">—</Td>
                 <Td className="font-medium">{d.producto?.nombre} <Badge tone="violet" className="ml-1">No estaba en el requerimiento</Badge></Td>
-                <Td right>—</Td><Td right>—</Td>
+                <Td right>—</Td><Td />
                 {recibido && <><Td right className="font-semibold">{fmtQty(d.cantidad_recibida)}</Td><Td right>{fmtSoles(d.precio_unitario)}</Td></>}
                 {conObs && <Td />}
               </tr>
             ))}
           </tbody>
         </Table>
-        )}
-        {/* compra directa: solo cuándo debe llegar (el proveedor lo pone el almacén con la boleta) */}
-        {porComprar && (
-          <ActionForm action={comprarRequerimientoAlmacen} className="flex flex-wrap items-end justify-end gap-3 border-t border-line px-5 py-4">
-            <input type="hidden" name="id" value={r.id} />
-            <label className="w-60"><span className="label">Debe llegar <span className="font-normal normal-case text-subtle">(opcional)</span></span><input type="datetime-local" name="fecha_compromiso" min={ahora} className="field" /></label>
-            <SubmitButton confirm="¿Marcar como comprado? El almacén registrará la llegada con la boleta.">Comprado</SubmitButton>
-          </ActionForm>
-        )}
       </Section>
-
-      {/* hoja para imprimir (PDF): el pedido para el proveedor, igual que la imagen (sin datos internos) */}
-      <section className="documento print-area hidden print:block">
-        <header className="mb-4 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-3">
-          <div className="flex items-center gap-3"><Image src={logo} alt="" width={120} height={52} className="h-12 w-auto object-contain" />
-            <div><p className="font-bold">{empresa}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p>
-              {negocio?.direccion && <p className="max-w-md text-xs">{negocio.direccion}</p>}</div></div>
-          <p className="text-xl font-bold">PEDIDO</p>
-        </header>
-        <p className="mb-3 text-sm">Fecha: {fmtDate(hoyLima())}</p>
-        <table className="w-full text-sm">
-          <thead><tr><th className="th w-12 text-left">N°</th><th className="th text-left">Producto</th><th className="th text-right">Cantidad</th></tr></thead>
-          <FilasImpresion filas={filasDoc} />
-        </table>
-      </section>
     </>
   )
-  return marcar ? <Seleccion>{contenido}</Seleccion> : contenido
 }
