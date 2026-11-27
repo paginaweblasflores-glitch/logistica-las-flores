@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ClipboardList, Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getAmbito, getPanel, getAlmacenActivo, soloConsulta } from '@/lib/session'
+import { getAmbito, getPanel, getAlmacenActivo } from '@/lib/session'
 import { fmtDate, fmtPct, fmtSoles, haceDias } from '@/lib/format'
 import { sp } from '@/lib/utils'
 import { paginar } from '@/lib/paginacion'
@@ -53,7 +53,8 @@ export default async function RequerimientosPage({ searchParams }: { searchParam
     esLogistica ? porAprobar : Promise.resolve({ count: 0 }),
     esLogistica ? rlPorEnviar(local?.id) : Promise.resolve(0),
   ])
-  const puedeCrear = panel !== 'logistica' && !(panel === 'almacen' && soloConsulta(sel))
+  // con «Todos», el almacén también crea: productos de varios almacenes (un requerimiento por almacén)
+  const puedeCrear = panel !== 'logistica'
   const pct = kpi?.length ? kpi.filter((x) => x.dentro_objetivo).length / kpi.length : null
   // con un almacén elegido, la columna «Almacén» repetiría lo mismo en cada fila
   const colLugar = !(panel === 'almacen' && sel.id)

@@ -54,12 +54,22 @@ export async function crearRequerimiento(_: ActionResult, fd: FormData): Promise
 /** Requerimiento del ALMACÉN: su lista de productos (de su almacén) para reponer stock. Sin área, firma ni precio. */
 export async function crearRequerimientoAlmacen(_: ActionResult, fd: FormData): Promise<ActionResult> {
   return run(async () => {
+    // con «Todos» arriba: productos de varios almacenes (cada línea con el suyo) → un requerimiento por almacén
+    const varios = fd.get('varios') === '1'
     const lineas = parseLines(fd.get('lineas'))
-      .filter((l) => l.producto_id && Number(l.cantidad) > 0)
-      .map((l) => ({ producto_id: l.producto_id, cantidad: num(l.cantidad), unidad_id: l.unidad_elegida || l.unidad_id || null, equivale: l.equivale ? num(l.equivale) : null, observacion: l.observacion || null }))
-    if (!fd.get('almacen')) return { error: 'Elija arriba el almacén.' }
+      .filter((l) => l.producto_id && Number(l.cantidad) > 0 && (!varios || l.almacen_id))
+      .map((l) => ({ ...(varios ? { almacen_id: l.almacen_id } : {}), producto_id: l.producto_id, cantidad: num(l.cantidad),
+        unidad_id: l.unidad_elegida || l.unidad_id || null, equivale: l.equivale ? num(l.equivale) : null, observacion: l.observacion || null }))
+    if (!varios && !fd.get('almacen')) return { error: 'Elija arriba el almacén.' }
     if (!lineas.length) return { error: 'Agregue al menos un producto con cantidad.' }
     const supabase = await createClient()
+    if (varios) {
+      check(await supabase.rpc('fn_crear_requerimientos_almacenes', {
+        p_lineas: lineas, p_fecha_requerida: fd.get('fecha_requerida') || null, p_observacion: String(fd.get('observacion') ?? ''),
+      }))
+      revalidatePath('/requerimientos')
+      redirect('/requerimientos')
+    }
     const { data, error } = await supabase.rpc('fn_crear_requerimiento_almacen', {
       p_almacen: String(fd.get('almacen')), p_lineas: lineas,
       p_fecha_requerida: fd.get('fecha_requerida') || null, p_observacion: String(fd.get('observacion') ?? ''),
