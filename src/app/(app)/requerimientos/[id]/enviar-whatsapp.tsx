@@ -10,6 +10,8 @@ type Datos = {
   referencia: string
   empresa: string
   ruc: string
+  /** dirección fiscal de la empresa */
+  direccion: string
   logo: string
   filas: FilaDoc[]
 }
@@ -40,8 +42,8 @@ async function cargarLogo(src: string) {
 }
 
 /**
- * La imagen del pedido para el proveedor (PNG): quién pide (logo, razón social, RUC), la fecha y lo que debe
- * traer (N°, producto, cantidad). Sin datos internos: ni códigos, ni almacén, ni observaciones.
+ * La imagen del pedido para el proveedor (PNG): quién pide (logo, razón social, RUC y dirección), la fecha y lo
+ * que debe traer (N°, producto, cantidad). Sin datos internos: ni códigos, ni almacén, ni observaciones.
  */
 async function dibujar(d: Datos): Promise<Blob> {
   const medir = document.createElement('canvas').getContext('2d')!
@@ -50,8 +52,18 @@ async function dibujar(d: Datos): Promise<Blob> {
   medir.font = `26px ${FUENTE}`
   const filas = d.filas.map((f) => ({ ...f, lineas: partir(medir, f.producto, anchoProd) }))
   const altoFila = (n: number) => n * 34 + 26
-  const alto = 230 + 64 + filas.reduce((s, f) => s + altoFila(f.lineas.length), 0) + 110
   const fecha = new Date().toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  // encabezado: logo + empresa (razón social, RUC, dirección) a la izquierda, «PEDIDO» a la derecha
+  const logo = await cargarLogo(d.logo)
+  const anchoLogo = logo ? Math.min(220, (logo.width / logo.height) * 96) : 0
+  const x = logo ? P + anchoLogo + 24 : P
+  medir.font = `20px ${FUENTE}`
+  const dir = d.direccion ? partir(medir, d.direccion, W - P - 230 - x) : []
+  // la raya baja si la dirección ocupa más de una línea
+  const raya = Math.max(160, 116 + dir.length * 26 + 30)
+  const dy = raya - 160
+  const alto = 230 + dy + 64 + filas.reduce((s, f) => s + altoFila(f.lineas.length), 0) + 110
 
   const canvas = document.createElement('canvas')
   canvas.width = W; canvas.height = alto
@@ -60,20 +72,19 @@ async function dibujar(d: Datos): Promise<Blob> {
   ctx.fillStyle = MARCA; ctx.fillRect(0, 0, W, 10)
   ctx.textBaseline = 'alphabetic'
 
-  // encabezado: logo + empresa a la izquierda, «PEDIDO» a la derecha
-  const logo = await cargarLogo(d.logo)
-  let x = P
-  if (logo) { const h = 96, w = Math.min(220, (logo.width / logo.height) * h); ctx.drawImage(logo, P, 44, w, h); x = P + w + 24 }
-  ctx.fillStyle = TINTA; ctx.font = `bold 26px ${FUENTE}`; ctx.fillText(d.empresa, x, 84)
-  ctx.fillStyle = GRIS; ctx.font = `22px ${FUENTE}`; ctx.fillText(`RUC ${d.ruc}`, x, 118)
+  if (logo) ctx.drawImage(logo, P, 44, anchoLogo, 96)
+  ctx.fillStyle = TINTA; ctx.font = `bold 26px ${FUENTE}`; ctx.fillText(d.empresa, x, 78)
+  ctx.fillStyle = GRIS; ctx.font = `22px ${FUENTE}`; ctx.fillText(`RUC ${d.ruc}`, x, 110)
+  ctx.font = `20px ${FUENTE}`
+  dir.forEach((l, j) => ctx.fillText(l, x, 140 + j * 26))
   ctx.textAlign = 'right'
   ctx.fillStyle = TINTA; ctx.font = `bold 40px ${FUENTE}`; ctx.fillText('PEDIDO', W - P, 108)
   ctx.textAlign = 'left'
-  ctx.fillStyle = TINTA; ctx.fillRect(P, 160, W - 2 * P, 3)
-  ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(`Fecha: ${fecha}`, P, 204)
+  ctx.fillStyle = TINTA; ctx.fillRect(P, raya, W - 2 * P, 3)
+  ctx.fillStyle = GRIS; ctx.font = `24px ${FUENTE}`; ctx.fillText(`Fecha: ${fecha}`, P, 204 + dy)
 
   // tabla
-  let y = 230
+  let y = 230 + dy
   ctx.fillStyle = FONDO; ctx.fillRect(P, y, W - 2 * P, 56)
   ctx.fillStyle = TINTA; ctx.font = `bold 22px ${FUENTE}`
   ctx.fillText('N°', cN + 12, y + 36); ctx.fillText('Producto', cProd, y + 36)

@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { panelDe, type Panel } from '@/lib/panel'
 
-export type Local = { id: string; codigo: string; nombre: string; color: string; ruc: string | null; razon_social: string | null }
+export type Local = { id: string; codigo: string; nombre: string; color: string; ruc: string | null; razon_social: string | null
+  /** dirección fiscal de la empresa (en el pedido al proveedor) */
+  direccion?: string | null }
 export type Usuario = { id: string; username: string; nombre: string; rol: string; todos_locales: boolean }
 
 export const AMBITO_COOKIE = 'ambito'

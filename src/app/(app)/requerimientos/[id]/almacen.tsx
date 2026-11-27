@@ -31,8 +31,8 @@ type R = { id: string; numero: string; estado: string; parcial: boolean; almacen
  */
 export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmacen, negocio }: {
   r: R; det: DetAlm[]; compras: CompraAlm[]; cots: { id: string; numero: string; estado: string }[]
-  /** el negocio del requerimiento (logo, razón social y RUC en la imagen y en la hoja impresa) */
-  negocio: { codigo: string; nombre: string; razon_social: string; ruc: string } | null
+  /** el negocio del requerimiento (logo, razón social, RUC y dirección en la imagen y en la hoja impresa) */
+  negocio: { codigo: string; nombre: string; razon_social: string; ruc: string; direccion: string } | null
   gestiona: boolean; esAlmacen: boolean
 }) {
   const vigentes = compras.filter((c) => c.estado !== 'anulada')
@@ -73,7 +73,7 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
           {/* aprobado: Logística lo envía por WhatsApp (imagen) o lo imprime / guarda en PDF; se puede reenviar */}
           {/* solo con los productos marcados en la tabla (lo que va a cada proveedor) */}
           {marcar && <>
-            <EnviarWhatsApp referencia={r.numero} empresa={empresa} ruc={negocio?.ruc ?? '—'} logo={logo} filas={filasDoc} />
+            <EnviarWhatsApp referencia={r.numero} empresa={empresa} ruc={negocio?.ruc ?? '—'} direccion={negocio?.direccion ?? ''} logo={logo} filas={filasDoc} />
             <ImprimirMarcados />
           </>}
           {porComprar && (
@@ -157,7 +157,8 @@ export function RequerimientoAlmacen({ r, det, compras, cots, gestiona, esAlmace
       <section className="documento print-area hidden print:block">
         <header className="mb-4 flex items-center justify-between gap-4 border-b-2 border-ink-900 pb-3">
           <div className="flex items-center gap-3"><Image src={logo} alt="" width={120} height={52} className="h-12 w-auto object-contain" />
-            <div><p className="font-bold">{empresa}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p></div></div>
+            <div><p className="font-bold">{empresa}</p><p className="text-xs">RUC {negocio?.ruc ?? '—'}</p>
+              {negocio?.direccion && <p className="max-w-md text-xs">{negocio.direccion}</p>}</div></div>
           <p className="text-xl font-bold">PEDIDO</p>
         </header>
         <p className="mb-3 text-sm">Fecha: {fmtDate(hoyLima())}</p>

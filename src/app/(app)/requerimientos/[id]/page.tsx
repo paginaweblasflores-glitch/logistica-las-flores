@@ -42,7 +42,7 @@ export default async function RequerimientoPage({ params }: {
   if (r.origen === 'almacen') {
     return <RequerimientoAlmacen r={r} det={(det ?? []) as unknown as DetAlm[]} compras={(compras ?? []) as unknown as CompraAlm[]}
       cots={cots ?? []} gestiona={panelDe(usuario.rol) === 'logistica'} esAlmacen={panelDe(usuario.rol) === 'almacen'}
-      negocio={loc ? { codigo: loc.codigo, nombre: loc.nombre, razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : null} />
+      negocio={loc ? { codigo: loc.codigo, nombre: loc.nombre, razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '', direccion: loc.direccion ?? '' } : null} />
   }
   const empresa = loc ? { razon_social: loc.razon_social ?? '', ruc: loc.ruc ?? '' } : undefined
   type D = { id: string; producto_id: string | null; descripcion: string; imagen: string | null; marca: string | null; area_destino: string | null; stock_actual: number | null
