@@ -63,12 +63,25 @@ export function ExportButton({ filename, table, rpc, columns: todas, opcionales 
       const XLSX = await import('xlsx')
       // solo las cantidades pasan a número: los códigos y documentos quedan como texto («00123» no se vuelve 123)
       const esCodigo = (k: string, label: string) => /codigo|cod|cód|nro|numero|n°|documento|guia|guía|ruc|serie|placa|telefono/i.test(`${k} ${label}`)
+      // montos en soles: con 2 decimales (el costo promedio es un cálculo: 2 ÷ 3 = 0.6667 → 0.67)
+      const esDinero = (k: string, label: string) => /precio|costo|valor|importe|total|monto|ahorro|sobrecosto|flete|transporte|igv|subtotal|soles|s\//i.test(`${k} ${label}`)
+        && !/cant|stock|[íi]tems|productos|unidades|%|pct|horas|d[íi]as/i.test(`${k} ${label}`)
+      const dinero = new Set(Object.entries(columns).filter(([k, l]) => esDinero(k, l)).map(([k]) => k))
       const sheet = XLSX.utils.json_to_sheet(rows.map((r) => Object.fromEntries(Object.entries(columns).map(([k, label]) => {
         const v = r[k]
         const numero = typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) && !esCodigo(k, label)
           && !/^-?0\d/.test(v) && v.replace(/[-.]/g, '').length <= 15
-        return [label, numero ? Number(v) : v]
+        const n = typeof v === 'number' ? v : numero ? Number(v) : null
+        return [label, n !== null && dinero.has(k) ? Math.round(n * 100) / 100 : n ?? v]
       }))))
+      // y se ven siempre con 2 decimales en Excel (36 → 36.00)
+      Object.keys(columns).forEach((k, c) => {
+        if (!dinero.has(k)) return
+        for (let f = 1; f <= rows.length; f++) {
+          const celda = sheet[XLSX.utils.encode_cell({ r: f, c })]
+          if (celda && celda.t === 'n') celda.z = '#,##0.00'
+        }
+      })
       if (pie?.length) XLSX.utils.sheet_add_aoa(sheet, [[], ...pie], { origin: -1 })
       sheet['!cols'] = Object.values(columns).map((c) => ({ wch: Math.max(12, c.length + 4) }))
       const wb = XLSX.utils.book_new()
