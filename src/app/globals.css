@@ -90,8 +90,8 @@
 /* Impresión de actas, informes y reportes */
 /* Ticket de la tiquetera térmica (80 mm; 64 mm de contenido seguro): solo se ve al imprimirlo */
 .ticket-portal { display: none; }
-/* medida válida de respaldo: al imprimir, el ticket pone su alto exacto (ver components/ticket.tsx) */
-@page ticket { size: 80mm 200mm; margin: 0; }
+/* el rollo de la ticketera (Roll Paper 80 x 297 mm): igual al papel del driver, para que no se centre ni lleve márgenes */
+@page ticket { size: 80mm 297mm; margin: 0; }
 @media print {
   html.imprimiendo-ticket body > *:not(.ticket-portal) { display: none !important; }
   html.imprimiendo-ticket body { page: ticket; }
